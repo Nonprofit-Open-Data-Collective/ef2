@@ -1,0 +1,17 @@
+^vignettes/.*\.Rmd\.orig$
+^vignettes/precompile\.R$
+^vignettes/.*\.html$
+^.*\.Rproj$
+^\.Rproj\.user$
+^dev$
+^vignettes\.zip$
+^Makefile$
+^irs990efile$
+^data-raw$
+^\.claude$
+^doc$
+^Meta$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^CITATION\.cff$

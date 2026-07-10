@@ -4,12 +4,16 @@
 \alias{update_db}
 \title{Update the DuckDB database for a given tax year}
 \usage{
-update_db(year, index, path = ".")
+update_db(year, index, path = ".", version = "efile_v2_1")
 }
 \arguments{
 \item{year}{Integer tax year.}
 
 \item{index}{Data frame with TaxYear and URL columns.}
+
+\item{path}{Directory for the temporary and merged database files.}
+
+\item{version}{S3 version subfolder under duckdb/ (default "efile_v2_1").}
 }
 \value{
 Invisibly path to merged database or NULL.

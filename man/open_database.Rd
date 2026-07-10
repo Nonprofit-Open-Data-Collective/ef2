@@ -4,15 +4,22 @@
 \alias{open_database}
 \title{Open a DuckDB database connection with S3 support}
 \usage{
-open_database(s3_region = "us-east-1", anonymous = TRUE)
+open_database(
+  s3_region = "us-east-1",
+  s3_endpoint = "s3.amazonaws.com",
+  anonymous = TRUE
+)
 }
 \arguments{
 \item{s3_region}{AWS region (default "us-east-1").}
 
+\item{s3_endpoint}{S3 endpoint domain (default "s3.amazonaws.com").
+Use "s3.dualstack.us-east-1.amazonaws.com" for dualstack URLs.}
+
 \item{anonymous}{Logical; TRUE for anonymous S3 access.}
 }
 \value{
-DBI connection.
+DBI connection object with httpfs configured for S3.
 }
 \description{
 Open a DuckDB database connection with S3 support

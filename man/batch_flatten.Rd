@@ -12,6 +12,8 @@ batch_flatten(batch, con, ccf, quietly = TRUE)
 \item{con}{Active DBI connection to DuckDB.}
 
 \item{ccf}{Concordance crosswalk (prepared via prep_concordance()).}
+
+\item{quietly}{Logical; if FALSE, print per-file progress.}
 }
 \value{
 Invisibly, the number of successfully processed XMLs.

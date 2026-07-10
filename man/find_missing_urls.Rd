@@ -4,12 +4,15 @@
 \alias{find_missing_urls}
 \title{Identify missing URLs in a given tax year}
 \usage{
-find_missing_urls(year, index)
+find_missing_urls(year, index, version = "efile_v2_1")
 }
 \arguments{
 \item{year}{Integer tax year.}
 
 \item{index}{Data frame with columns TaxYear and URL.}
+
+\item{version}{S3 version subfolder under duckdb/ (default "efile_v2_1").
+Set to NULL or "" to target the unversioned duckdb/ path.}
 }
 \value{
 Character vector of missing URLs.

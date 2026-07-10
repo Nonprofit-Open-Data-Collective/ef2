@@ -1,0 +1,131 @@
+---
+title: "Extracting One-to-Many Tables"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Extracting One-to-Many Tables}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  eval     = TRUE    # precomputed once via vignettes/precompile.R
+)
+options(width = 100)
+```
+
+## Overview
+
+A **one-to-many (1:M)** table has *many* rows per filing: a grant list, a roster of
+officers and their compensation, a schedule of foreign activities. The same set of
+fields repeats once per entry. Reassembling those entries correctly is the whole
+job — and it hinges on the `TABLE_ID` column produced during
+[flattening](flatten-xmls.html).
+
+Our example filing's Schedule I lists **83 grants**, and its Part VII lists **15
+officers and directors** — two clean one-to-many tables.
+
+```{r load}
+library(ef2)
+library(dplyr)
+library(tidyr)
+
+# Start from the flattened table shipped with the package
+# (produced in "Flattening IRS 990 e-file XML").
+flat <- readRDS(system.file("extdata", "sample_flat.rds", package = "ef2"))
+```
+
+## The repeating group
+
+We'll extract Schedule I, Part II — grants to U.S. organizations,
+`SI-P02-T01-GRANTS-US-ORGS-GOVTS`:
+
+```{r long}
+grants_long <- flat |>
+  filter(TYPE == "terminal", RDB_TABLE == "SI-P02-T01-GRANTS-US-ORGS-GOVTS")
+
+n_distinct(grants_long$TABLE_ID)   # number of grants in this filing
+
+grants_long |>
+  select(TABLE_ID, VARIABLE_NAME, VALUE) |>
+  head(10)
+```
+
+Look at the `TABLE_ID` column: the first grant's fields are all `TID-00001`, the
+second grant's are all `TID-00002`, and so on. **That is the entire trick of 1:M
+extraction** — the positional index `[N]` from the XPath, captured as `TABLE_ID`,
+tells us which fields belong to the same entry.
+
+## Pivot — keyed by filing *and* `TABLE_ID`
+
+The 1:1 pivot keyed only on `OBJECTID`. For 1:M we key on `OBJECTID` **and**
+`TABLE_ID`, so each entry becomes its own row:
+
+```{r wide}
+grants_wide <- grants_long |>
+  select(OBJECTID, TABLE_ID, VARIABLE_NAME, VALUE) |>
+  pivot_wider(names_from = VARIABLE_NAME, values_from = VALUE, values_fill = "")
+
+dim(grants_wide)   # one row per grant
+
+grants_wide |>
+  select(TABLE_ID, SI_02_GRANT_US_ORG_EIN, SI_02_GRANT_US_ORG_AMT_CASH) |>
+  head(5)
+```
+
+This mirrors `build_rdb_table()`, which does the same pivot against the DuckDB
+`FLATXML` table and carries `TABLE_ID` through so the rows stay separated.
+
+**Why `TABLE_ID` is essential:** drop it from the key and every grant's values
+pile into a single cell. `pivot_wider()` can't store thousands of EINs in one
+position, so it produces list-columns instead of a clean table:
+
+```{r without-id}
+grants_long |>
+  select(OBJECTID, VARIABLE_NAME, VALUE) |>
+  pivot_wider(names_from = VARIABLE_NAME, values_from = VALUE) |>
+  summarise(across(everything(), ~ class(.x)[1]))
+```
+
+Each column comes back as a `list` — the tell-tale sign that a repeating group was
+pivoted without its instance key.
+
+## Header variants across schema versions
+
+The full pipeline doesn't match a single XPath. Because the IRS renamed nodes over
+the years, `get_table_headers()` stores *several* candidate header paths per table,
+and `build_rdb_table()` matches **any** of them:
+
+```{r headers}
+get_table_headers()[["SI-P02-T01-GRANTS-US-ORGS-GOVTS"]]
+```
+
+Whichever variant a given filing used, its rows land in the same logical table.
+
+## Edge case: ragged entries
+
+Entries in a 1:M group are not required to carry the same fields — one grant may
+list a street address, another only a city, a third may add a non-cash valuation.
+Pivoting yields a **ragged** table, and `values_fill = ""` backfills the gaps so
+every row has the same columns:
+
+```{r ragged}
+# Fill rate of every grant field across all entries: 1 = always present.
+grants_wide |>
+  summarise(across(-c(OBJECTID, TABLE_ID), ~ round(mean(.x != ""), 2))) |>
+  glimpse()
+```
+
+## What you learned
+
+- A 1:M table is the `TYPE == "terminal"` rows for one `RDB_TABLE` spread across
+  many `TABLE_ID`s (`TID-00001`, `TID-00002`, …).
+- Pivoting keyed on `OBJECTID` **and** `TABLE_ID` reassembles one row per entry —
+  the core of `build_rdb_table()`.
+- Dropping `TABLE_ID` collapses the group into unusable list-columns.
+- `get_table_headers()` supplies multiple header variants so schema changes across
+  years still resolve to one logical table.
+- `values_fill = ""` squares off ragged entries that don't all share the same
+  fields.

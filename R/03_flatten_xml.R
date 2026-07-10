@@ -56,8 +56,8 @@ flatten_xml <- function( doc, url, ccf=NULL ){
   order <- seq_along(xx)
   type  <- get_type(xx)
   xx2   <- gsub( "\\[[0-9]{1,5}\\]", "", xx )
-  xx2   <- gsub( "irs:", "", xx )
-  xx2   <- gsub( "efile:", "", xx )
+  xx2   <- gsub( "irs:", "", xx2 )
+  xx2   <- gsub( "efile:", "", xx2 )
 
   table.id     <- get_table_id( xx )
   table.header <- purrr::map2_chr( xx2, type, get_header )
@@ -107,7 +107,7 @@ flatten_xml <- function( doc, url, ccf=NULL ){
 #' @param ccf Optional concordance crosswalk.
 #' @param retries Integer retries.
 #' @param pause_min,pause_max Random backoff bounds in seconds.
-#' @return List with FLATXML, ATTRIBUTES, and KEYS (from `irs990efile`).
+#' @return List with FLATXML, ATTRIBUTES, and KEYS (see [get_keys()]).
 #' @export
 get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max = 4) {
   RES <- list(FAILED_URLS = data.frame(failed_urls = url, stringsAsFactors = FALSE))
@@ -132,12 +132,12 @@ get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max 
   }
 
   if (is.null(doc)) {
-    cat(paste0("❌ FAIL: ", url, "\n"))
+    cat(paste0("\u274C FAIL: ", url, "\n"))
     return(RES)
   }
 
   xml2::xml_ns_strip(doc)
-  KEYS       <- irs990efile::get_keys(doc, url) |> as.data.frame()
+  KEYS       <- get_keys(doc, url) |> as.data.frame()
   FLATXML    <- flatten_xml(doc, url, ccf)
   ATTRIBUTES <- get_attr_df(doc, url)
 
@@ -154,6 +154,7 @@ get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max 
 #' @param batch Character vector of XML URLs.
 #' @param con Active DBI connection to DuckDB.
 #' @param ccf Concordance crosswalk (prepared via prep_concordance()).
+#' @param quietly Logical; if FALSE, print per-file progress.
 #' @return Invisibly, the number of successfully processed XMLs.
 #' @export
 batch_flatten <- function(batch, con, ccf, quietly=TRUE) {
@@ -170,7 +171,7 @@ batch_flatten <- function(batch, con, ccf, quietly=TRUE) {
     if(!quietly){ cat(sprintf("  [%02d/%02d] %s\n", i, length(batch), basename(url))) }
     res <- try(get_flat_xml(url, ccf), silent = TRUE)
     if (inherits(res, "try-error") || is.null(res$FLATXML)) {
-      cat("  ❌ Failed:", url, "\n")
+      cat("  \u274C Failed:", url, "\n")
       failed <- c(failed, url)
     } else {
       results[[i]] <- res
@@ -181,7 +182,7 @@ batch_flatten <- function(batch, con, ccf, quietly=TRUE) {
   results <- purrr::compact(results)
 
   # --- Report ---
-  cat("  ✅ Completed batch with", length(results), "records.",
+  cat("  \u2705 Completed batch with", length(results), "records.",
       if (length(failed)) paste("(", length(failed), "failed )\n") else "\n")
 
   # --- Write results to DuckDB ---

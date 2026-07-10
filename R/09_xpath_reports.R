@@ -84,21 +84,22 @@ generate_xpath_report <- function(year,
   "
 
   # Execute and fetch results
-  message("?? Running XPATH report for tax year ", year, "...")
+  message("Running XPATH report for tax year ", year, "...")
   xpath_report <- DBI::dbGetQuery(con, sql)
 
   # Close the connection
   DBI::dbDisconnect(con, shutdown = shutdown)
 
-  # Create output directory if needed
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  # Create output directory if needed (under base_path)
+  outdir <- file.path(base_path, output_dir)
+  if (!dir.exists(outdir)) dir.create(outdir, recursive = TRUE)
 
   # File path
-  outfile <- file.path(base_path,output_dir, paste0(year, "-XPATH-REPORT.csv"))
+  outfile <- file.path(outdir, paste0(year, "-XPATH-REPORT.csv"))
 
   # Write to CSV
   utils::write.csv(xpath_report, outfile, row.names = FALSE)
-  message("? XPATH report saved to: ", outfile)
+  message("XPATH report saved to: ", outfile)
 
   # Return dataframe invisibly
   invisible(xpath_report)

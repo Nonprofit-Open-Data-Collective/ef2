@@ -24,6 +24,9 @@ resumes from existing batch files in the year's folder.}
 \item{ccf}{Concordance crosswalk object (optional).}
 
 \item{path}{Directory in which to store year subfolder and database files.}
+
+\item{is_update}{Logical; if TRUE, this is an incremental update build rather
+than a full-year rebuild.}
 }
 \value{
 Invisibly returns the path to the merged DuckDB database.

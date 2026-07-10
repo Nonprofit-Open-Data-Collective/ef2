@@ -4,10 +4,12 @@
 \alias{get_s3_database}
 \title{Attach an S3-hosted DuckDB database by filename}
 \usage{
-get_s3_database(filename, anonymous = TRUE)
+get_s3_database(filename, version = NULL, anonymous = TRUE)
 }
 \arguments{
 \item{filename}{DuckDB filename within s3://nccs-efile/duckdb/.}
+
+\item{version}{Optional S3 version subfolder under duckdb/ (e.g. "efile_v2_1").}
 
 \item{anonymous}{Logical for anonymous access.}
 }

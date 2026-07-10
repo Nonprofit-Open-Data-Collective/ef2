@@ -1,6 +1,6 @@
 
 
-#' Utility: split a vector into labeled groups like "G01{25}"
+#' Utility: split a vector into labeled groups
 #'
 #' @param x Vector to split.
 #' @param G Group size.
@@ -20,9 +20,9 @@ split_into_groups <- function (x, G = 25) {
 
 #' Split a URL vector into named groups and persist RDS
 #'
-#' @param year Year folder.
 #' @param urls Character vector of URLs.
 #' @param group.size Integer batch size.
+#' @param path Directory in which to create the `batches/` subfolder.
 #' @return Invisibly the batch list.
 #' @export
 split_urls <- function (urls, group.size = 25, path=".") {
@@ -149,6 +149,31 @@ gather_batches <- function(path = ".") {
 create_batchfiles <- function (index, years, group.size) {
   years <- as.character(years)
   purrr::walk(years, split_index, index = index, group.size = group.size)
+}
+
+#' Prepare an index for batching
+#'
+#' Filters an efiler index to the requested tax years and form types, and
+#' removes duplicate filings (by URL). Ported from the `irs990efile` package.
+#'
+#' @param years Optional vector of tax years to keep. If NULL, all years in
+#'   `index` are used.
+#' @param index Data frame with at least `TaxYear`, `FormType`, and `URL`
+#'   columns.
+#' @param form.type Character vector of form types to keep
+#'   (default `c("990", "990EZ")`).
+#' @return A filtered, de-duplicated copy of `index`.
+#' @export
+prep_index <- function( years = NULL, index, form.type = c("990", "990EZ") ){
+  if( missing(index) || is.null(index) ){
+    stop( "prep_index() requires an 'index' data frame with TaxYear, FormType, and URL columns." )
+  }
+  if( is.null(years) ){ years <- unique( index[["TaxYear"]] ) }
+  years <- sort( as.character( years ) )
+  index <- dplyr::filter( index, as.character(.data$TaxYear) %in% years )
+  index <- dplyr::filter( index, .data$FormType %in% form.type )
+  index <- dplyr::distinct( index, .data$URL, .keep_all = TRUE )
+  return( index )
 }
 
 #' Split index to batchfile RDS for a single year

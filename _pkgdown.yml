@@ -1,0 +1,164 @@
+url: https://nonprofit-open-data-collective.github.io/ef2/
+
+template:
+  bootstrap: 5
+  bootswatch: simplex
+  bslib:
+    pkgdown-nav-height: 100px
+
+articles:
+- title: Building & maintaining the database
+  navbar: ~
+  contents:
+  - identify-new-returns
+  - updating-duckdb
+  - updating-the-concordance
+- title: Parsing 990 XML
+  navbar: ~
+  contents:
+  - flatten-xmls
+  - extract-one-to-one-tables
+  - extract-one-to-many-tables
+
+reference:
+- title: The concordance
+  desc: >
+    The master crosswalk mapping XML XPaths to standardized variable names and
+    relational tables, plus tools to refresh and validate it.
+  contents:
+  - get_concordance
+  - prep_concordance
+  - update_concordance
+  - concordance_is_current
+- title: The filing index
+  desc: >
+    Locate the returns available to process from the Giving Tuesday Data Commons.
+  contents:
+  - get_current_index_full
+  - get_current_index_batch
+  - find_current_index_full
+  - find_current_index_batch
+  - download_current_index_full
+- title: Index helpers
+  desc: Lower-level helpers used to resolve and validate index URLs.
+  contents:
+  - url_is_valid
+  - get_url_status
+  - get_url_status_df
+  - get_last_n_dates
+  - extract_dates
+  - find_most_recent_date
+  - get_index_list_awscli
+  - extract_filenames_full
+  - extract_filenames_batch
+  - get_current_index_full_awscli
+  - get_all_batch_indices_awscli
+- title: Creating batch files
+  desc: >
+    Split an index of URLs into batches for parallel processing.
+  contents:
+  - create_batchfiles
+  - split_index
+  - prep_index
+  - split_urls
+  - split_into_groups
+  - write_batches
+  - gather_batches
+  - remove_batch
+- title: Flattening XML
+  desc: >
+    Convert one nested 990 XML filing into a long, one-row-per-node table.
+  contents:
+  - flatten_xml
+  - get_flat_xml
+  - batch_flatten
+  - get_attr_df
+  - get_keys
+- title: XML node & XPath helpers
+  desc: >
+    Utilities used during flattening to classify nodes, derive table ids, and
+    read values from the XML tree.
+  contents:
+  - get_type
+  - find_parent_nodes
+  - find_terminal_nodes
+  - get_header
+  - get_table_id
+  - get_n
+  - get_vnames
+  - get_xpath_vname
+  - get_object_id
+  - get_object_id2
+  - retrieve_xml
+  - standardize_boole
+  - namedList
+- title: Writing to DuckDB
+  desc: Persist flattened filings into DuckDB tables.
+  contents:
+  - send_flat_xml_to_db
+  - check_for_columns
+- title: Building the database
+  desc: >
+    Orchestrate parallel flattening of batches into a merged DuckDB database.
+  contents:
+  - build_database
+  - resume_build_database
+  - merge_duckdbs
+  - validate_merge
+- title: Updating the database
+  desc: >
+    Detect and process filings missing from an existing database.
+  contents:
+  - find_missing_urls
+  - update_db
+  - merge_databases
+- title: Connecting to DuckDB & S3
+  desc: Open DuckDB connections and read/write databases on S3.
+  contents:
+  - open_database
+  - get_s3_database
+  - configure_aws_credentials
+  - write_csv_to_s3
+- title: Extracting tables
+  desc: >
+    Pivot the flattened data into analysis-ready one-to-one and one-to-many
+    relational tables.
+  contents:
+  - extract_csv_tables
+  - build_table
+  - build_rdb_table
+  - flatten_table
+  - add_keys
+  - get_table_names
+  - get_table_headers
+- title: Inspecting & reporting
+  desc: >
+    Summarize database contents and report on XPath coverage across filings.
+  contents:
+  - inspect_ddb
+  - summarize_attr_table
+  - summarize_attr_schema
+  - retrieve_attr_df
+  - generate_xpath_report
+  - process_xpaths
+- title: Exploring table structure
+  desc: >
+    Diagram the hierarchical structure of a table from its concordance XPaths.
+  contents:
+  - get_table_xpaths
+  - get_nd
+  - create_edgelist_v1
+  - create_edgelist_v2
+  - print_table_str
+  - plot_table_str
+- title: Utilities
+  desc: General-purpose helpers.
+  contents:
+  - format_ein
+  - extract_functions
+  - generate_ascii_diagram
+- title: Data
+  desc: Datasets and data-structure references shipped with the package.
+  contents:
+  - concordance
+  - index

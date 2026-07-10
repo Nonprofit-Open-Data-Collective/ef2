@@ -7,15 +7,18 @@
 #'
 #' @param year Integer tax year.
 #' @param index Data frame with columns TaxYear and URL.
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#'   Set to NULL or "" to target the unversioned duckdb/ path.
 #' @return Character vector of missing URLs.
 #' @export
-find_missing_urls <- function(year, index) {
-  base::message("🔎 Checking for missing URLs in TaxYear ", year)
+find_missing_urls <- function(year, index, version = "efile_v2_1") {
+  base::message("\U0001F50E Checking for missing URLs in TaxYear ", year)
 
   year <- as.character(year)
+  version_seg <- if (base::is.null(version) || version == "") "" else base::paste0(version, "/")
   remote_db_url <- base::sprintf(
-    "https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/EFILE%s.duckdb",
-    year
+    "https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/%sEFILE%s.duckdb",
+    version_seg, year
   )
 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
@@ -46,12 +49,14 @@ find_missing_urls <- function(year, index) {
 #'
 #' @param year Integer tax year.
 #' @param index Data frame with TaxYear and URL columns.
+#' @param path Directory for the temporary and merged database files.
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
 #' @return Invisibly path to merged database or NULL.
 #' @export
-update_db <- function(year, index, path=".") {
-  base::message("🚀 Updating database for TaxYear ", year)
+update_db <- function(year, index, path=".", version = "efile_v2_1") {
+  base::message("\U0001F680 Updating database for TaxYear ", year)
 
-  missing_urls <- find_missing_urls(year, index)
+  missing_urls <- find_missing_urls(year, index, version = version)
 
   if (base::length(missing_urls) == 0) {
     base::message("No missing files found. Database is up to date.")
@@ -66,9 +71,9 @@ update_db <- function(year, index, path=".") {
   dir.create(year_path, showWarnings = FALSE, recursive = TRUE)
 
   output_path <- paste0( path, "/EFILE", year, ".duckdb" )
-  merge_databases( year, missing_urls, temp_db_path, output_path )
+  merge_databases( year, missing_urls, temp_db_path, output_path, version = version )
 
-  base::message("🎯 Update complete for TaxYear ", year)
+  base::message("\U0001F3AF Update complete for TaxYear ", year)
   base::message("The updated DB is located at ", output_path)
   base::invisible(output_path)
 }
@@ -81,14 +86,16 @@ update_db <- function(year, index, path=".") {
 #' @param missing_urls Character vector (for logging).
 #' @param temp_db_path Path to temporary DuckDB with new filings.
 #' @param output_path Path for final merged DB.
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
 #' @return Invisibly `output_path`.
 #' @export
-merge_databases <- function(year, missing_urls, temp_db_path, output_path) {
-  base::message("🔧 Merging databases for year ", year)
+merge_databases <- function(year, missing_urls, temp_db_path, output_path, version = "efile_v2_1") {
+  base::message("\U0001F527 Merging databases for year ", year)
 
+  version_seg <- if (base::is.null(version) || version == "") "" else base::paste0(version, "/")
   remote_db_url <- base::sprintf(
-    "https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/EFILE%d.duckdb",
-    year
+    "https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/%sEFILE%d.duckdb",
+    version_seg, year
   )
   log_path <- base::sprintf("merge_log_%d.txt", year)
   log_conn <- base::file(log_path, open = "a")
@@ -115,7 +122,7 @@ merge_databases <- function(year, missing_urls, temp_db_path, output_path) {
     tbls_tmp  <- DBI::dbListTables(con, "tmpdb")
 
     if (!(tbl %in% tbls_src)) {
-      base::warning("Skipping ", tbl, " — not found in source DB.")
+      base::warning("Skipping ", tbl, " \u2014 not found in source DB.")
       next
     }
 
@@ -158,7 +165,7 @@ merge_databases <- function(year, missing_urls, temp_db_path, output_path) {
     duration <- base::round(base::as.numeric(tbl_end - tbl_start, units = "secs"), 2)
 
     base::writeLines(base::sprintf(
-      "%s | %s | %d → %d rows | Duration: %.2f sec",
+      "%s | %s | %d \u2192 %d rows | Duration: %.2f sec",
       tbl,
       base::format(tbl_end, "%Y-%m-%d %H:%M:%S"),
       before_count,
@@ -175,8 +182,8 @@ merge_databases <- function(year, missing_urls, temp_db_path, output_path) {
   base::writeLines(base::sprintf("Total Duration: %.2f sec\nMerge complete.\n", total_time), log_conn)
   base::close(log_conn)
 
-  base::message("✅ Merged DB written to: ", output_path)
-  base::message("📜 Logfile saved at: ", log_path)
+  base::message("\u2705 Merged DB written to: ", output_path)
+  base::message("\U0001F4DC Logfile saved at: ", log_path)
   base::invisible(output_path)
 }
 

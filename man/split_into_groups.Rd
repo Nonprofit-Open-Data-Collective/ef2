@@ -2,7 +2,7 @@
 % Please edit documentation in R/02_create_batchfiles.R
 \name{split_into_groups}
 \alias{split_into_groups}
-\title{Utility: split a vector into labeled groups like "G01{25}"}
+\title{Utility: split a vector into labeled groups}
 \usage{
 split_into_groups(x, G = 25)
 }
@@ -15,5 +15,5 @@ split_into_groups(x, G = 25)
 Named list of groups.
 }
 \description{
-Utility: split a vector into labeled groups like "G01{25}"
+Utility: split a vector into labeled groups
 }

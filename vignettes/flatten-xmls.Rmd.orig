@@ -1,0 +1,247 @@
+---
+title: "Flattening IRS 990 e-file XML"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Flattening IRS 990 e-file XML}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  eval     = TRUE
+)
+options(width = 100)
+```
+
+## Overview
+
+An IRS 990 e-file document is a deeply nested XML tree. Before it can become tidy
+relational tables, `ef2` **flattens** it: every node becomes one row, so the whole
+hierarchy is laid out as a long data frame we can filter, label, and pivot. This
+article walks through `flatten_xml()` and explains what each piece of the output
+means.
+
+We use one real filing shipped with the package. It's a modest ~100 KB return that
+still exercises the interesting cases — its Schedule I lists **83 grants** and its
+Part VII lists **15 officers/directors**, both one-to-many tables:
+
+```{r read}
+library(ef2)
+library(dplyr)
+
+# The filing's public URL is used to derive its OBJECTID; the XML itself is
+# read from the copy shipped with the package.
+url <- "https://gt990datalake-rawdata.s3.amazonaws.com/EfileData/XmlFiles/202341529349301414_public.xml"
+xml_file <- system.file("extdata", "sample_990.xml", package = "ef2")
+
+doc <- xml2::read_xml(xml_file)
+xml2::xml_ns_strip(doc)
+doc
+```
+
+`xml2::xml_ns_strip()` removes XML namespaces (the `irs:` / `efile:` prefixes). The
+IRS schema changes namespace declarations across years; stripping them lets us
+write one set of XPaths that works for every schema version.
+
+Here is one raw grant entry from Schedule I — a small nested subtree that will
+become one row of a relational table:
+
+```{r snippet}
+xml2::xml_find_first(doc, "//RecipientTable") |> as.character() |> cat()
+```
+
+## Step 1 — Flatten the document
+
+```{r flatten}
+flat <- flatten_xml(doc, url)
+dim(flat)
+names(flat)
+```
+
+One filing expands to ~1,700 rows — one per XML node. The columns are:
+
+| Column | Meaning |
+|---|---|
+| `OBJECTID` | Unique filing id (`OID-…`), derived from the URL |
+| `ORDER` | Document order of the node (1, 2, 3, …) |
+| `XPATH` | Full path to the node, **with** positional indices like `[3]` |
+| `XPATH2` | Normalized path — indices and namespaces stripped — used to join the concordance |
+| `TABLE_HEADER` | The node's grouping ("root") context |
+| `TABLE_ID` | Which *instance* of a repeating group this node belongs to |
+| `TYPE` | `"parent"` (structure) or `"terminal"` (data) |
+| `RDB_TABLE` | Concordance table the node maps to (blank if unmapped) |
+| `VARIABLE_NAME` | Standardized variable name (or the raw node name if unmapped) |
+| `VALUE` | The node's text content |
+
+The flattened table is also shipped with the package (`sample_flat.rds`) so the
+companion "extract tables" articles can start straight from it.
+
+## Step 2 — Root nodes vs. leaf nodes
+
+XML mixes two kinds of nodes: **branch/root nodes** that only group other nodes,
+and **leaf nodes** that actually hold a value. `ef2` predicts which is which,
+because *only leaf nodes carry data worth extracting.*
+
+It does this purely from the set of XPaths, with two helpers:
+
+- `find_terminal_nodes()` — a path is a **leaf** ("terminal") if no other path
+  starts with it followed by `/` (i.e. it has no children).
+- `find_parent_nodes()` — every ancestor prefix of some path is a **parent**.
+
+`get_type()` combines them and labels every row:
+
+```{r types}
+table(flat$TYPE)
+```
+
+```{r type-example}
+# A parent node (groups children, holds no data) vs. its leaf children:
+flat |>
+  filter(XPATH2 %in% c(
+    "/Return/ReturnData/IRS990ScheduleI/RecipientTable",             # parent
+    "/Return/ReturnData/IRS990ScheduleI/RecipientTable/CashGrantAmt" # terminal
+  )) |>
+  select(XPATH2, TYPE, VALUE) |>
+  head(3)
+```
+
+**Why it matters:** extraction always begins with `filter(TYPE == "terminal")`.
+The parent rows are dropped — they exist only to describe structure.
+
+**Edge case:** the prediction is structural, not semantic. If the IRS schema ever
+emitted a node that held *both* text and child elements ("mixed content"), the
+heuristic would treat it as a parent and its text would be ignored. In practice the
+990 schema keeps data on leaf nodes, so this is safe — but it is the reason `ef2`
+derives type from the tree shape rather than trusting any single node.
+
+## Step 3 — "Table headers" are root nodes
+
+`TABLE_HEADER` is the grouping path a node lives under, computed by `get_header()`.
+A table header **is a root node**: it is a grouping label only — it contains other
+subnodes and never holds its own data. It is what ties the repeating children of,
+say, one grant together, and what maps a group of leaf nodes to a logical table.
+
+```{r header}
+flat |>
+  filter(grepl("RecipientTable\\[1\\]/CashGrantAmt", XPATH)) |>
+  select(TABLE_HEADER, XPATH2, VALUE)
+```
+
+## Step 4 — What the table numbers mean
+
+`TABLE_ID` (e.g. `TID-00000`, `TID-00001`) is the key that separates
+**one-to-one** data from **one-to-many** data. It is derived by `get_table_id()`,
+which reads the *last positional index* `[N]` from the raw `XPATH`:
+
+- **`TID-00000` → one-to-one (1:1).** The node is not inside a repeating group, so
+  the filing has exactly one of it (organization name, total revenue, a Yes/No
+  checkbox). Every 1:1 field across every schedule shares `TID-00000`.
+- **`TID-00001`, `TID-00002`, … → one-to-many (1:M).** The node is the *Nth
+  instance* of a repeating group. All the fields of one grant (its EIN, amount,
+  purpose) share the same `TABLE_ID`, which is exactly what lets us reassemble each
+  grant as its own row later.
+
+```{r table-id}
+# 1:1 fields all sit in TID-00000:
+flat |>
+  filter(TABLE_ID == "TID-00000", TYPE == "terminal",
+         RDB_TABLE == "F9-P01-T00-SUMMARY") |>
+  select(VARIABLE_NAME, TABLE_ID, VALUE) |>
+  head(4)
+
+# 1:M grant #1 vs grant #2 -> different TABLE_IDs:
+flat |>
+  filter(grepl("IRS990ScheduleI/RecipientTable", XPATH2),
+         VARIABLE_NAME == "SI_02_GRANT_US_ORG_AMT_CASH") |>
+  select(TABLE_ID, VARIABLE_NAME, VALUE) |>
+  head(4)
+```
+
+## Step 5 — Labeling XPaths with concordance variable names
+
+Flattening joins `XPATH2` against the packaged concordance to attach a standardized
+`VARIABLE_NAME` and its logical `RDB_TABLE`. This is why `XPATH2` must have the
+`[N]` indices stripped — `RecipientTable[1]/CashGrantAmt` and
+`RecipientTable[2]/CashGrantAmt` are the *same variable*, and both must match the
+single concordance entry `RecipientTable/CashGrantAmt`.
+
+```{r labeled}
+flat |>
+  filter(grepl("IRS990ScheduleI/RecipientTable", XPATH2), TYPE == "terminal") |>
+  select(XPATH2, RDB_TABLE, VARIABLE_NAME, VALUE) |>
+  head(4)
+```
+
+**Tracking XPaths that aren't in the concordance yet.** When a path has no
+concordance entry, `flatten_xml()` does not drop it — it keeps the row, falls back
+to the raw node name (via `get_vnames()`), and leaves `RDB_TABLE` blank. This filing
+happens to be fully covered by the concordance:
+
+```{r mapped-count}
+c(labeled   = sum(flat$TYPE == "terminal" & flat$RDB_TABLE != ""),
+  unlabeled = sum(flat$TYPE == "terminal" & flat$RDB_TABLE == ""))
+```
+
+To see the fallback in action, flatten a snippet containing a node the concordance
+has never seen:
+
+```{r fallback}
+mini <- xml2::read_xml(
+  "<Return><ReturnData><IRS990><BrandNewFutureField>42</BrandNewFutureField></IRS990></ReturnData></Return>")
+xml2::xml_ns_strip(mini)
+
+flatten_xml(mini, "example") |>
+  filter(TYPE == "terminal") |>
+  select(XPATH2, RDB_TABLE, VARIABLE_NAME, VALUE)
+```
+
+`BrandNewFutureField` isn't in the concordance, so `RDB_TABLE` stays blank and
+`VARIABLE_NAME` defaults to the node name. Across a whole corpus,
+`generate_xpath_report()` and `process_xpaths()` roll these fallbacks up into a
+report of every distinct `XPATH2`, how often it occurs, and which schema versions it
+appears in. Joining that report to the concordance (`all = TRUE`) surfaces exactly
+which XPaths are still **unmapped** — the worklist for extending the concordance to
+cover new or rare fields.
+
+## Step 6 — Attributes are a separate table
+
+Not all data lives in element *text*. Some is stored in XML **attributes** — for
+example, a node may carry `referenceDocumentId` pointing at a supporting statement.
+Element text is what `flatten_xml()` captures; attributes are pulled out separately
+by `get_attr_df()` into their own tidy table (`OBJECTID`, `node_name`, `xpath`,
+`attr_name`, `attr_value`), which `ef2` stores as the `ATTRIBUTES` table in DuckDB
+alongside `FLATXML`:
+
+```{r attrs}
+attrs <- get_attr_df(doc, url)
+dim(attrs)
+count(attrs, attr_name, name = "n")
+```
+
+## Step 7 — Keys
+
+Finally, `get_keys()` extracts the filing-level metadata that keys every table —
+the EIN, organization name, tax period, return type/flags, and schema version:
+
+```{r keys}
+str(get_keys(doc, url))
+```
+
+## What you learned
+
+- `flatten_xml()` turns one nested filing into one row per node.
+- `TYPE` distinguishes structural **parent/root** nodes from data-bearing
+  **terminal/leaf** nodes; only terminals are extracted.
+- `TABLE_HEADER` is a root grouping node with no data of its own.
+- `TABLE_ID` encodes repetition: `TID-00000` = one-to-one, `TID-0000N` = the Nth row
+  of a one-to-many group.
+- `XPATH2` (indices stripped) joins the concordance to attach `VARIABLE_NAME` /
+  `RDB_TABLE`; unmapped paths keep their node name and are tracked for concordance
+  updates.
+- Attributes and keys are extracted into their own tables.
+
+Next: **"Extracting One-to-One Tables"** and **"Extracting One-to-Many Tables"** pivot
+this flattened output into analysis-ready tables.

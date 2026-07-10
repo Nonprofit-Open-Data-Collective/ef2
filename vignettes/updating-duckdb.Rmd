@@ -1,0 +1,219 @@
+---
+title: "Updating a DuckDB Database with Missing Files"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Updating a DuckDB Database with Missing Files}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  eval     = FALSE   # long-running, network + S3 access; run interactively
+)
+```
+
+## Overview
+
+The companion tutorial, *"Identifying New Returns to Process,"* showed how to find the filings
+that are **available** but not yet **processed** into a year's database. This
+tutorial takes the next step: it processes those missing filings and folds them
+into a fresh, up-to-date copy of the database.
+
+The whole update is a single call:
+
+```r
+update_db(year, index, path)
+```
+
+Under the hood, `update_db()` orchestrates three stages:
+
+1. **`find_missing_urls()`** — diff the index against the remote database to get
+   the URLs that still need processing (see the previous tutorial).
+2. **`build_database(..., is_update = TRUE)`** — flatten just those missing XML
+   files into a small *temporary* DuckDB.
+3. **`merge_databases()`** — combine the existing remote database with the
+   temporary one, aligning schemas, into a new local `EFILE<YEAR>.duckdb`.
+
+You can run the one-shot version or drive each stage by hand for more control.
+
+## Prerequisites
+
+```{r prereqs}
+library(ef2)
+
+YEAR <- 2023
+PATH <- "C:/Users/username/DATA/DUCKDB_2025"   # local output location
+
+# The index of AVAILABLE filings, pulled from the Data Commons and
+# subset to the tax year of interest.
+index   <- get_current_index_full()             # or get_current_index_batch()
+index_y <- index[index$TaxYear == YEAR, ]
+```
+
+You need:
+
+- an **index** of available filings from `get_current_index_full()` (or
+  `get_current_index_batch()`), subset to the year via its `TaxYear` column,
+- network access to the GT data lake (raw XML) and the NCCS S3 bucket
+  (the existing `EFILE<YEAR>.duckdb`), and
+- enough local disk at `path` to hold the merged database.
+
+## The one-shot update
+
+```{r update-oneshot}
+out_path <- update_db(year = YEAR, index = index_y, path = PATH)
+out_path
+```
+
+Expected console output:
+
+```
+🚀 Updating database for TaxYear 2023
+🔎 Checking for missing URLs in TaxYear 2023
+1289 missing URLs detected.
+Building temporary database with 1289 missing files
+
+📦 Creating new batch files for 2023
+🧮 Processing 52 batches across 4 workers for 2023...
+🔧 Merging databases for year 2023
+Appended KEYS from temporary DB (schema aligned).
+Appended FLATXML from temporary DB (schema aligned).
+Appended ATTRIBUTES from temporary DB (schema aligned).
+✅ Merged DB written to: C:/Users/username/DATA/DUCKDB_2025/EFILE2023.duckdb
+📜 Logfile saved at: merge_log_2023.txt
+🎯 Update complete for TaxYear 2023
+```
+
+If the database is already current, `update_db()` short-circuits:
+
+```
+No missing files found. Database is up to date.
+```
+
+and returns `NULL` without writing anything.
+
+The result is a **new local** database at
+`<path>/EFILE<YEAR>.duckdb` that contains everything from the published remote
+database **plus** the newly processed filings.
+
+## What each stage does
+
+### 1. Find the gap
+
+Identical to the previous tutorial — this is the diff that decides whether there
+is any work to do:
+
+```{r stage-find}
+missing_urls <- find_missing_urls(year = YEAR, index = index_y)
+length(missing_urls)
+```
+
+If `length(missing_urls) == 0`, stop here.
+
+### 2. Build a temporary database
+
+`build_database()` flattens the missing XML into a temporary DuckDB. The
+`is_update = TRUE` flag tells it this is an incremental build rather than a
+full-year rebuild. It batches the URLs (default `group.size = 25`) and processes
+them across up to four parallel workers.
+
+```{r stage-build}
+temp_db_path <- build_database(
+  year      = YEAR,
+  urls      = missing_urls,
+  path      = PATH,
+  is_update = TRUE
+)
+```
+
+Only the missing filings are processed, so this is fast compared with rebuilding
+a full tax year.
+
+### 3. Merge into the final database
+
+`merge_databases()` attaches both the remote source database (read-only) and the
+temporary database, then appends the new rows into the three core tables —
+`KEYS`, `FLATXML`, and `ATTRIBUTES` — reconciling any column differences so the
+schemas line up.
+
+```{r stage-merge}
+output_path <- file.path(PATH, paste0("EFILE", YEAR, ".duckdb"))
+
+merge_databases(
+  year         = YEAR,
+  missing_urls = missing_urls,
+  temp_db_path = temp_db_path,
+  output_path  = output_path
+)
+```
+
+Running the three stages by hand is equivalent to a single `update_db()` call —
+use it when you want to inspect the temporary database before merging, or re-run
+just the merge.
+
+## Reading the merge log
+
+Every merge appends a timestamped record to `merge_log_<YEAR>.txt`, including
+per-table before/after row counts and durations:
+
+```
+=== Merge Log for TaxYear 2023 ===
+Start Time: 2026-07-09 10:22:14
+Missing URLs: 1289
+
+KEYS       | 2026-07-09 10:22:41 | 1204331 → 1205620 rows | Duration: 3.11 sec
+FLATXML    | 2026-07-09 10:24:02 | 88231145 → 88402910 rows | Duration: 79.4 sec
+ATTRIBUTES | 2026-07-09 10:24:10 | 1204331 → 1205620 rows | Duration: 7.88 sec
+Total Duration: 121.4 sec
+Merge complete.
+```
+
+The `KEYS` row count going from 1,204,331 → 1,205,620 (a jump of 1,289 — exactly
+the number of missing URLs) confirms every missing filing landed.
+
+## Step 4 — Verify the update
+
+Two quick checks confirm the merged database is complete and self-consistent.
+
+**Re-run the diff.** After the update, the gap against the same index should be
+zero. Point a fresh read at your *local* file (or re-publish and re-check the
+remote):
+
+```{r verify-diff}
+inspect_ddb(output_path, table = "KEYS", n = 5)   # peek at the merged KEYS table
+```
+
+**Confirm the row count.** The number of unique returns should now match the
+index total for the year:
+
+```{r verify-count}
+con <- DBI::dbConnect(duckdb::duckdb(), dbdir = output_path)
+DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM KEYS;")
+DBI::dbDisconnect(con, shutdown = TRUE)
+```
+
+## Updating several years
+
+Because `update_db()` no-ops when a year is already current, it's safe to loop
+over an entire archive — only years with missing files do any real work:
+
+```{r update-all}
+years <- 2019:2023
+index <- get_current_index_full()   # pull the full multi-year index once
+
+for (y in years) {
+  idx <- index[index$TaxYear == y, ]
+  update_db(year = y, index = idx, path = PATH)
+}
+```
+
+## What you learned
+
+- `update_db(year, index, path)` runs the full missing-files workflow end to end.
+- It finds the gap, builds **only** the missing filings, and merges them with the
+  existing database into a new local `EFILE<YEAR>.duckdb`.
+- Every run leaves a `merge_log_<YEAR>.txt` audit trail with per-table row deltas.
+- The update is **idempotent**: re-running on a current database changes nothing.

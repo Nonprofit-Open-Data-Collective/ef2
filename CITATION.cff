@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+title: 'ef2: Tools for Building and Maintaining the IRS 990 Efiler Database'
+abstract: "The <code>ef2</code> R package provides tools for retrieving, parsing, and flattening IRS 990 e-file XML filings into analysis-ready relational tables. It converts deeply nested XML into DuckDB databases using a concordance crosswalk that maps XML XPaths to standardized variable names, and supports large-scale, parallelized ingestion of the IRS 990 efile dataset. It is a second-generation rewrite of the irs990efile package with a more robust and faster XML-to-database workflow."
+authors:
+- affiliation: Arizona State University
+  family-names: Lecy
+  given-names: Jesse
+  orcid: https://orcid.org/0000-0003-4974-0782
+date-released: '2025-10-28'
+license: MIT
+repository-code: https://github.com/Nonprofit-Open-Data-Collective/ef2
+type: software
+version: 0.1.0

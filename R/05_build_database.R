@@ -12,6 +12,8 @@
 #' @param group.size Integer batch size (default = 25).
 #' @param ccf Concordance crosswalk object (optional).
 #' @param path Directory in which to store year subfolder and database files.
+#' @param is_update Logical; if TRUE, this is an incremental update build rather
+#'   than a full-year rebuild.
 #'
 #' @return Invisibly returns the path to the merged DuckDB database.
 #'
@@ -36,15 +38,15 @@ build_database <- function(year, urls = NULL, group.size = 25,
 
   # --- Use existing or new batch files ---
   if (!is.null(urls)) {
-    message("📦 Creating new batch files for ", year)
+    message("\U0001F4E6 Creating new batch files for ", year)
     batchfile <- split_urls(urls = urls, group.size = group.size, path = year_path)
   } else {
-    message("↩️  Resuming existing batches for ", year)
+    message("\u21A9\uFE0F  Resuming existing batches for ", year)
     batchfile <- gather_batches(year_path)
   }
   n_batches <- length(batchfile)
   if (n_batches == 0) {
-    message("✅ No batches to process for ", year)
+    message("\u2705 No batches to process for ", year)
     return(invisible(NULL))
   }
 
@@ -57,7 +59,7 @@ build_database <- function(year, urls = NULL, group.size = 25,
   worker_assignments <- split(names(batchfile),
                               rep(1:max.cores, length.out = n_batches))
 
-  message("🧮 Processing ", n_batches, " batches across ",
+  message("\U0001F9EE Processing ", n_batches, " batches across ",
           max.cores, " workers for ", year, "...")
 
   # --- Logging helper (defined outside workers for serialization safety) ---
@@ -91,13 +93,13 @@ build_database <- function(year, urls = NULL, group.size = 25,
     con <- tryCatch(
       DBI::dbConnect(duckdb::duckdb(), dbdir = worker_db),
       error = function(e) {
-        log_msg("❌ Connection error:", conditionMessage(e))
+        log_msg("\u274C Connection error:", conditionMessage(e))
         return(NULL)
       }
     )
 
     if (is.null(con) || !DBI::dbIsValid(con)) {
-      log_msg("❌ Invalid connection; skipping worker", worker_id)
+      log_msg("\u274C Invalid connection; skipping worker", worker_id)
       return(worker_db)
     }
 
@@ -117,10 +119,10 @@ build_database <- function(year, urls = NULL, group.size = 25,
         batch_flatten(batch, con = con, ccf = ccf)
         remove_batch(batchname, path = year_path)
         elapsed <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 1)
-        log_msg("✅ Completed batch", batchname, "in", elapsed, "sec")
+        log_msg("\u2705 Completed batch", batchname, "in", elapsed, "sec")
       },
       error = function(e) {
-        log_msg("❗ Error in batch", batchname, ":", conditionMessage(e))
+        log_msg("\u2757 Error in batch", batchname, ":", conditionMessage(e))
       })
     }
 
@@ -146,10 +148,10 @@ build_database <- function(year, urls = NULL, group.size = 25,
   future::plan(future::sequential)
   main_db <- file.path(year_path, sprintf("EFILE%d.duckdb", year))
   if(is_update){main_db <- file.path(year_path, sprintf("EFILE%d_UPDATE.duckdb", year))}
-  message("\n🪄 Merging ", length(worker_dbs), " worker databases into ", main_db)
+  message("\n\U0001FA84 Merging ", length(worker_dbs), " worker databases into ", main_db)
   merge_duckdbs(main_db, worker_dbs)
 
-  message("\n🎉 All batches processed and merged for ", year)
+  message("\n\U0001F389 All batches processed and merged for ", year)
   invisible(main_db)
 }
 
@@ -179,7 +181,7 @@ resume_build_database <- function(year, ccf = NULL, path = ".") {
   n_batches <- length(batchfile)
 
   if (n_batches == 0) {
-    message("✅ No remaining batches to process for ", year)
+    message("\u2705 No remaining batches to process for ", year)
     return(invisible(NULL))
   }
 
@@ -202,10 +204,10 @@ resume_build_database <- function(year, ccf = NULL, path = ".") {
 merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALSE) {
   stopifnot(length(worker_dbs) > 0)
 
-  message("🔧 Merging ", length(worker_dbs), " worker databases...")
+  message("\U0001F527 Merging ", length(worker_dbs), " worker databases...")
 
   if (overwrite && file.exists(main_db)) {
-    message("🧹 Removing existing main database: ", basename(main_db))
+    message("\U0001F9F9 Removing existing main database: ", basename(main_db))
     unlink(main_db, force = TRUE)
   }
 
@@ -235,7 +237,7 @@ merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALS
     }
 
     alias <- paste0("src_", gsub("\\W", "_", basename(dbs)))
-    message("🔗 Attaching worker DB: ", basename(dbs))
+    message("\U0001F517 Attaching worker DB: ", basename(dbs))
     DBI::dbExecute(con, sprintf("ATTACH '%s' AS %s (READ_ONLY);", dbs, alias))
 
     tbls_src <- DBI::dbListTables(con, alias)
@@ -244,7 +246,7 @@ merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALS
       tbl_start <- Sys.time()
 
       if (!(tbl %in% tbls_src)) {
-        message("⚠️  Skipping ", tbl, " — not found in ", basename(dbs))
+        message("\u26A0\uFE0F  Skipping ", tbl, " \u2014 not found in ", basename(dbs))
         next
       }
 
@@ -253,7 +255,7 @@ merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALS
         DBI::dbExecute(con, sprintf(
           "CREATE TABLE main.%s AS SELECT * FROM %s.%s LIMIT 0;", tbl, alias, tbl
         ))
-        message("🆕 Created table ", tbl)
+        message("\U0001F195 Created table ", tbl)
       }
 
       # Schema alignment
@@ -283,9 +285,9 @@ merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALS
       after_count <- DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM main.%s;", tbl))$n
 
       duration <- round(as.numeric(Sys.time() - tbl_start, units = "secs"), 2)
-      message(sprintf("✅ Appended %d rows to %s (%.2f sec)", after_count - before_count, tbl, duration))
+      message(sprintf("\u2705 Appended %d rows to %s (%.2f sec)", after_count - before_count, tbl, duration))
       writeLines(sprintf(
-        "%s | %s | %d → %d rows | Duration: %.2f sec | %s",
+        "%s | %s | %d \u2192 %d rows | Duration: %.2f sec | %s",
         tbl,
         format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
         before_count,
@@ -299,14 +301,14 @@ merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALS
   }
 
   if (cleanup) {
-    message("🧽 Removing worker databases...")
+    message("\U0001F9FD Removing worker databases...")
     unlink(worker_dbs, force = TRUE)
   }
 
   total_time <- round(as.numeric(Sys.time() - start_time, units = "secs"), 2)
   writeLines(sprintf("Total Duration: %.2f sec\nMerge complete.\n", total_time), log_conn)
-  message("✅ Merge complete: ", basename(main_db))
-  message("📜 Log saved to: ", log_path)
+  message("\u2705 Merge complete: ", basename(main_db))
+  message("\U0001F4DC Log saved to: ", log_path)
 
   invisible(main_db)
 }
@@ -323,11 +325,11 @@ merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALS
 #'   (e.g. all `worker_XX_YYYY.duckdb` files).
 #' @return A tibble summarizing row counts for each table:
 #'   \itemize{
-#'     \item `table_name` – table name
-#'     \item `main_rows` – number of rows in the merged database
-#'     \item `worker_sum` – total rows across all workers
-#'     \item `n_workers` – number of workers containing that table
-#'     \item `match` – TRUE/FALSE indicating if totals match
+#'     \item `table_name` - table name
+#'     \item `main_rows` - number of rows in the merged database
+#'     \item `worker_sum` - total rows across all workers
+#'     \item `n_workers` - number of workers containing that table
+#'     \item `match` - TRUE/FALSE indicating if totals match
 #'   }
 #' @examples
 #' \dontrun{
@@ -339,7 +341,7 @@ validate_merge <- function(main_db, worker_dbs) {
   stopifnot(file.exists(main_db))
   stopifnot(length(worker_dbs) > 0)
 
-  message("🔍 Validating merged database against ", length(worker_dbs), " workers...")
+  message("\U0001F50D Validating merged database against ", length(worker_dbs), " workers...")
 
   # --- Helper: count rows in one DuckDB ---
   count_tables <- function(db_path) {
@@ -387,14 +389,14 @@ validate_merge <- function(main_db, worker_dbs) {
     dplyr::arrange(dplyr::desc(main_rows))
 
   # --- Print summary nicely ---
-  message("\n📊 Row count comparison:")
+  message("\n\U0001F4CA Row count comparison:")
   print(comparison, n = nrow(comparison))
 
   mismatches <- comparison |> dplyr::filter(!match | is.na(match))
   if (nrow(mismatches) == 0) {
-    message("\n✅ All tables validated successfully! Totals match across main and workers.")
+    message("\n\u2705 All tables validated successfully! Totals match across main and workers.")
   } else {
-    message("\n⚠️  Mismatched row counts detected in: ",
+    message("\n\u26A0\uFE0F  Mismatched row counts detected in: ",
             paste(mismatches$table_name, collapse = ", "))
   }
 

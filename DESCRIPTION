@@ -1,8 +1,9 @@
 Package: ef2
 Type: Package
-Title: Tools for building and maintaining the IRS 990 efiler database.
+Title: Tools for Building and Maintaining the IRS 990 Efiler Database
 Version: 0.1.0
-Author: Jesse Lecy [aut, cre]
+Authors@R:
+    person("Jesse", "Lecy", email = "jlecy@asu.edu", role = c("aut", "cre"))
 Description: Provides tools for retrieving, parsing, and flattening IRS 990 e-file XML data into relational form, 
     including schema alignment, batch processing, and DuckDB integration. Supports large-scale ingestion and 
     alignment of IRS e-file data using concordance crosswalks and parallelized retrieval.
@@ -21,12 +22,18 @@ Imports:
     tidyr,
     stringr,
     data.table,
-    tictoc,
     aws.signature,
-    irs990efile
+    knitr,
+    data.tree,
+    utils,
+    stats
 Suggests:
     roxygen2,
-    testthat
+    testthat,
+    rmarkdown,
+    usethis
+VignetteBuilder: knitr
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
+Config/testthat/edition: 3

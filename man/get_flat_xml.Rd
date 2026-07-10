@@ -16,7 +16,7 @@ get_flat_xml(url, ccf = NULL, retries = 3, pause_min = 1, pause_max = 4)
 \item{pause_min, pause_max}{Random backoff bounds in seconds.}
 }
 \value{
-List with FLATXML, ATTRIBUTES, and KEYS (from \code{irs990efile}).
+List with FLATXML, ATTRIBUTES, and KEYS (see \code{\link[=get_keys]{get_keys()}}).
 }
 \description{
 Download, parse, and flatten a single XML filing (with retries)

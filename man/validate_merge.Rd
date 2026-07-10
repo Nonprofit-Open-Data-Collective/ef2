@@ -15,11 +15,11 @@ validate_merge(main_db, worker_dbs)
 \value{
 A tibble summarizing row counts for each table:
 \itemize{
-\item \code{table_name} – table name
-\item \code{main_rows} – number of rows in the merged database
-\item \code{worker_sum} – total rows across all workers
-\item \code{n_workers} – number of workers containing that table
-\item \code{match} – TRUE/FALSE indicating if totals match
+\item \code{table_name} - table name
+\item \code{main_rows} - number of rows in the merged database
+\item \code{worker_sum} - total rows across all workers
+\item \code{n_workers} - number of workers containing that table
+\item \code{match} - TRUE/FALSE indicating if totals match
 }
 }
 \description{

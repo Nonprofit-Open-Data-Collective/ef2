@@ -1,0 +1,160 @@
+---
+title: "Identifying New Returns to Process"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Identifying New Returns to Process}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  eval     = TRUE    # this .orig is knit ONCE via precompile.R (hits S3);
+                     # the generated .Rmd ships with results baked in
+)
+```
+
+## Overview
+
+Every tax year, the IRS releases a new batch of 990 e-file XML filings. The
+complete list of filings *available* for a year lives in an **index file** — a
+data frame with (at minimum) a `TaxYear` and a `URL` column, where each `URL`
+points to one raw XML document on the Giving Tuesday ("GT") data lake:
+
+```
+https://gt990datalake-rawdata.s3.amazonaws.com/EfileData/XmlFiles/...
+```
+
+What has actually been *processed* lives in the published DuckDB databases on
+the NCCS S3 bucket, one database per year:
+
+```
+https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/efile_v2_1/EFILE<YEAR>.duckdb
+```
+
+Inside each database, the `KEYS` table holds one row per processed return, and
+its `URL` column records where that return came from.
+
+This tutorial shows how to **difference the two** — the filings the index says
+are available, versus the URLs already baked into the database — so you know
+exactly what still needs to be processed before running an update.
+
+
+## Step 1 — Load the current
+
+The index file contains a catalog of all IRS 990 Efile XMLs stored on the Giving Tuesday Data Commons: 
+
+```
+|     |    990|  990EZ|  990PF|  990T|
+|:----|------:|------:|------:|-----:|
+|2020 | 320343| 169865| 114957| 22673|
+|2021 | 336488| 202729| 119354| 23865|
+|2022 | 349062| 206135| 122819| 22626|
+|2023 | 354774| 206382| 124294| 22982|
+|2024 | 277302| 178868| 112560| 16881|
+|2025 |  22388|  35522|  15215|   668|
+```
+
+```{r load-index}
+library(ef2)
+
+index <- get_current_index_full()
+
+# show files by year + formtype
+
+table( index$TaxYear, index$FormType ) |>
+  knitr::kable()
+```
+
+
+
+## Step 2 — Difference available vs. processed
+
+`find_missing_urls()` does the comparison for you. It:
+
+1. attaches the remote `EFILE<YEAR>.duckdb` read-only over `httpfs`,
+2. pulls the distinct `URL` values out of the `KEYS` table (the *processed* set),
+3. filters your index to the requested `TaxYear` (the *available* set), and
+4. returns `setdiff(available, processed)` — the URLs not yet in the database.
+
+```{r find-missing}
+YEAR <- 2023
+missing_urls <- find_missing_urls(year = YEAR, index = index)
+
+length(missing_urls)   # how many filings still need processing
+head(missing_urls)
+```
+
+You'll see console messages like:
+
+```
+🔎 Checking for missing URLs in TaxYear 2023
+1289 missing URLs detected.
+```
+
+No network writes happen here — this is a **read-only diagnostic**. Run it as
+often as you like to monitor how far behind a database is.
+
+## Step 3 — Interpret the gap
+
+A few quick summaries make the result actionable:
+
+```{r summarize-gap}
+n_available <- nrow(dplyr::filter(index, TaxYear == as.character(YEAR)))
+n_missing   <- length(missing_urls)
+n_processed <- n_available - n_missing
+
+cat(
+  sprintf("Year %s\n", YEAR),
+  sprintf("  Available (index):   %s\n", format(n_available, big.mark = ",")),
+  sprintf("  Processed (DuckDB):  %s\n", format(n_processed, big.mark = ",")),
+  sprintf("  Missing:             %s (%0.1f%%)\n",
+          format(n_missing, big.mark = ","),
+          100 * n_missing / n_available)
+)
+```
+
+Interpreting the outcome:
+
+- **`n_missing == 0`** — the published database already contains every filing in
+  the index. Nothing to do.
+- **`n_missing > 0`** — those filings exist on the GT data lake but have not been
+  flattened into the database yet. Feed them to an update (next tutorial).
+- **A *negative* difference** (rare) means the database contains URLs your index
+  doesn't — usually a sign your local index is stale. Refresh the index file
+  before trusting the diff.
+
+## Step 4 — Check several years at once
+
+To audit an entire archive, loop over the years and collect the counts:
+
+```{r audit-all}
+years <- 2019:2023
+
+audit <- purrr::map_dfr(years, function(y) {
+  idx <- dplyr::filter( index, TaxYear == y )
+  miss <- find_missing_urls(year = y, index = idx)
+  data.frame(
+    TaxYear   = y,
+    available = nrow(idx),
+    missing   = length(miss)
+  )
+})
+
+audit$processed <- audit$available - audit$missing
+audit
+```
+
+This gives you a one-glance table of where every year stands.
+
+## What you learned
+
+- Index files enumerate the filings **available** on the GT data lake.
+- The `KEYS` table inside each `EFILE<YEAR>.duckdb` records what's **processed**.
+- `find_missing_urls(year, index)` returns the difference — a character vector
+  of URLs still to be processed — without modifying anything.
+
+Once you have that vector of missing URLs, you're ready to build them into an
+update. See **"Updating a DuckDB Database with Missing Files."**

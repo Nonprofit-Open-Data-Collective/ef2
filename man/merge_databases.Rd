@@ -4,7 +4,13 @@
 \alias{merge_databases}
 \title{Merge DuckDB databases with schema alignment and timestamped logfile}
 \usage{
-merge_databases(year, missing_urls, temp_db_path, output_path)
+merge_databases(
+  year,
+  missing_urls,
+  temp_db_path,
+  output_path,
+  version = "efile_v2_1"
+)
 }
 \arguments{
 \item{year}{Integer tax year.}
@@ -14,6 +20,8 @@ merge_databases(year, missing_urls, temp_db_path, output_path)
 \item{temp_db_path}{Path to temporary DuckDB with new filings.}
 
 \item{output_path}{Path for final merged DB.}
+
+\item{version}{S3 version subfolder under duckdb/ (default "efile_v2_1").}
 }
 \value{
 Invisibly \code{output_path}.

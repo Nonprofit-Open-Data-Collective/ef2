@@ -143,7 +143,7 @@ build_rdb_table <- function( table_name, year, TABLE.HEADERS, con, cc_file, post
 #'   DuckDB databases.
 #' @param years Integer vector. Tax years to process (e.g., 2009:2024).
 #' @param table_names Character vector of IRS 990 table names (defaults to
-#'   `irs990efile::get_table_names()` if not supplied).
+#'   [get_table_names()] if not supplied).
 #' @param ccf Data frame. Concordance crosswalk used for variable alignment.
 #' @param table_headers Data frame. Output of `get_table_headers()`, providing
 #'   schema details for relational table construction.
@@ -170,15 +170,15 @@ extract_csv_tables <- function(wd,
   if (!dir.exists(wd)) stop("Directory not found: ", wd)
   if (missing(years) || length(years) == 0) stop("Please supply one or more years.")
   if (is.null(table_names)) {
-    table_names <- irs990efile::get_table_names()
-    message("Using default table names from irs990efile::get_table_names()")
+    table_names <- get_table_names()
+    message("Using default table names from get_table_names()")
   }
   if (is.null(ccf)) { 
     ccf <- get_concordance()
     message("Using get_concordance() to generate ccf.") 
   }
   if (is.null(table_headers)) {
-    table_headers <- irs990efile::get_table_headers()
+    table_headers <- get_table_headers()
     message("Using default table headers from get_table_headers()")
   }
 

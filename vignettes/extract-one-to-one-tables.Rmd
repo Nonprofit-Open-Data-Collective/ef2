@@ -1,0 +1,187 @@
+---
+title: "Extracting One-to-One Tables"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Extracting One-to-One Tables}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+
+## Overview
+
+A **one-to-one (1:1)** table has exactly one row per filing: the header, the Part I
+summary, the balance sheet. These are the fields that appear once in a return.
+This article picks up the flattened output from
+[Flattening IRS 990 e-file XML](flatten-xmls.html) and turns one 1:1 table into a
+tidy, one-row-per-filing result.
+
+
+``` r
+library(ef2)
+library(dplyr)
+library(tidyr)
+
+# Start from the flattened table shipped with the package
+# (produced in "Flattening IRS 990 e-file XML").
+flat <- readRDS(system.file("extdata", "sample_flat.rds", package = "ef2"))
+dim(flat)
+#> [1] 1742   10
+```
+
+## What makes a table "one-to-one"
+
+The signature of a 1:1 field is `TABLE_ID == "TID-00000"` — it does not live inside
+any repeating group, so there is a single instance per filing (see the
+[flattening article](flatten-xmls.html) for how `TABLE_ID` is derived). We'll use
+the **Part I summary** table, `F9-P01-T00-SUMMARY`:
+
+
+``` r
+summary_long <- flat |>
+  filter(TYPE == "terminal", RDB_TABLE == "F9-P01-T00-SUMMARY")
+
+summary_long |>
+  select(TABLE_ID, VARIABLE_NAME, VALUE) |>
+  head(8)
+#>    TABLE_ID                    VARIABLE_NAME
+#> 1 TID-00000       F9_01_ACT_GVRN_ACT_MISSION
+#> 2 TID-00000     F9_01_ACT_GVRN_NUM_VOTE_MEMB
+#> 3 TID-00000 F9_01_ACT_GVRN_NUM_VOTE_MEMB_IND
+#> 4 TID-00000          F9_01_ACT_GVRN_EMPL_TOT
+#> 5 TID-00000           F9_01_ACT_GVRN_VOL_TOT
+#> 6 TID-00000      F9_01_ACT_GVRN_UBIZ_REV_TOT
+#> 7 TID-00000  F9_01_ACT_GVRN_UBIZ_TAXABLE_NET
+#> 8 TID-00000           F9_01_REV_CONTR_TOT_PY
+#>                                                                                         VALUE
+#> 1 THE CF SUPPORTS CHARITABLE, LITERARY AND EDUCATIONAL PROGRAMS IN THE NORTHERN REGION OF VA.
+#> 2                                                                                          14
+#> 3                                                                                          14
+#> 4                                                                                           5
+#> 5                                                                                          20
+#> 6                                                                                           0
+#> 7                                                                                           0
+#> 8                                                                                     3261609
+```
+
+Two things to notice: we keep only `TYPE == "terminal"` (the leaf nodes that hold
+data), and every row is `TID-00000`. That uniform `TABLE_ID` is what guarantees the
+table collapses to a single row.
+
+## Pivot long → wide
+
+Extracting a 1:1 table is a `pivot_wider()`: turn the `VARIABLE_NAME`/`VALUE` pairs
+into columns, keyed by the filing (`OBJECTID`).
+
+
+``` r
+one_row <- summary_long |>
+  select(OBJECTID, VARIABLE_NAME, VALUE) |>
+  pivot_wider(names_from = VARIABLE_NAME, values_from = VALUE)
+
+dim(one_row)
+#> [1]  1 39
+glimpse(one_row)
+#> Rows: 1
+#> Columns: 39
+#> $ OBJECTID                         <chr> "OID-202341529349301414"
+#> $ F9_01_ACT_GVRN_ACT_MISSION       <chr> "THE CF SUPPORTS CHARITABLE, LITERARY AND EDUCATIONAL PRO…
+#> $ F9_01_ACT_GVRN_NUM_VOTE_MEMB     <chr> "14"
+#> $ F9_01_ACT_GVRN_NUM_VOTE_MEMB_IND <chr> "14"
+#> $ F9_01_ACT_GVRN_EMPL_TOT          <chr> "5"
+#> $ F9_01_ACT_GVRN_VOL_TOT           <chr> "20"
+#> $ F9_01_ACT_GVRN_UBIZ_REV_TOT      <chr> "0"
+#> $ F9_01_ACT_GVRN_UBIZ_TAXABLE_NET  <chr> "0"
+#> $ F9_01_REV_CONTR_TOT_PY           <chr> "3261609"
+#> $ F9_01_REV_CONTR_TOT_CY           <chr> "3021050"
+#> $ F9_01_REV_PROG_TOT_PY            <chr> "27200"
+#> $ F9_01_REV_PROG_TOT_CY            <chr> "4000"
+#> $ F9_01_REV_INVEST_TOT_PY          <chr> "244783"
+#> $ F9_01_REV_INVEST_TOT_CY          <chr> "461981"
+#> $ F9_01_REV_OTH_PY                 <chr> "16728"
+#> $ F9_01_REV_OTH_CY                 <chr> "5277"
+#> $ F9_01_REV_TOT_PY                 <chr> "3550320"
+#> $ F9_01_REV_TOT_CY                 <chr> "3492308"
+#> $ F9_01_EXP_GRANT_SIMILAR_PY       <chr> "1828163"
+#> $ F9_01_EXP_GRANT_SIMILAR_CY       <chr> "2658733"
+#> $ F9_01_EXP_BEN_PAID_MEMB_PY       <chr> "0"
+#> $ F9_01_EXP_BEN_PAID_MEMB_CY       <chr> "0"
+#> $ F9_01_EXP_SAL_ETC_PY             <chr> "290670"
+#> $ F9_01_EXP_SAL_ETC_CY             <chr> "317287"
+#> $ F9_01_EXP_PROF_FUNDR_TOT_PY      <chr> "0"
+#> $ F9_01_EXP_PROF_FUNDR_TOT_CY      <chr> "0"
+#> $ F9_01_EXP_FUNDR_TOT_CY           <chr> "15799"
+#> $ F9_01_EXP_OTH_PY                 <chr> "650085"
+#> $ F9_01_EXP_OTH_CY                 <chr> "571369"
+#> $ F9_01_EXP_TOT_PY                 <chr> "2768918"
+#> $ F9_01_EXP_TOT_CY                 <chr> "3547389"
+#> $ F9_01_EXP_REV_LESS_EXP_PY        <chr> "781402"
+#> $ F9_01_EXP_REV_LESS_EXP_CY        <chr> "-55081"
+#> $ F9_01_NAFB_ASSET_TOT_BOY         <chr> "11769210"
+#> $ F9_01_NAFB_ASSET_TOT_EOY         <chr> "10569449"
+#> $ F9_01_NAFB_LIAB_TOT_BOY          <chr> "599602"
+#> $ F9_01_NAFB_LIAB_TOT_EOY          <chr> "1157596"
+#> $ F9_01_NAFB_TOT_BOY               <chr> "11169608"
+#> $ F9_01_NAFB_TOT_EOY               <chr> "9411853"
+```
+
+One filing in, one row out — each concordance variable is now a column. This is
+exactly what `flatten_table()` does against the DuckDB `FLATXML` table; here we run
+it in memory on a single filing to show the mechanics.
+
+## Adding keys
+
+In the full pipeline, `build_table()` wraps this pivot and then calls `add_keys()`
+to left-join the filing's `KEYS` (EIN, organization name, tax period, …) onto the
+front of the table, so every extracted row is self-describing:
+
+
+``` r
+url      <- "https://gt990datalake-rawdata.s3.amazonaws.com/EfileData/XmlFiles/202341529349301414_public.xml"
+xml_file <- system.file("extdata", "sample_990.xml", package = "ef2")
+doc  <- xml2::read_xml(xml_file); xml2::xml_ns_strip(doc)
+keys <- as.data.frame(get_keys(doc, url))
+
+cbind(keys[c("OBJECTID", "ORG_NAME_L1", "TAX_YEAR")], one_row[-1]) |>
+  select(OBJECTID, ORG_NAME_L1, TAX_YEAR,
+         F9_01_ACT_GVRN_EMPL_TOT, F9_01_ACT_GVRN_VOL_TOT) |>
+  glimpse()
+#> Rows: 1
+#> Columns: 5
+#> $ OBJECTID                <chr> "OID-202341529349301414"
+#> $ ORG_NAME_L1             <chr> "COMMUNITY FOUNDATION FOR LOUDOUN AND"
+#> $ TAX_YEAR                <chr> "2022"
+#> $ F9_01_ACT_GVRN_EMPL_TOT <chr> "5"
+#> $ F9_01_ACT_GVRN_VOL_TOT  <chr> "20"
+```
+
+## Edge case: a "1:1" field that isn't
+
+`pivot_wider()` assumes each `VARIABLE_NAME` occurs **once** per filing. If a field
+the concordance treats as 1:1 actually repeats in a return, `pivot_wider()` can't
+fit two values in one cell — it warns and produces a *list-column*:
+
+
+``` r
+n_per_var <- summary_long |> count(VARIABLE_NAME, name = "n")
+range(n_per_var$n)   # all 1 == cleanly one-to-one
+#> [1] 1 1
+```
+
+When this range is not `1 1`, that variable is a signal to investigate: either the
+filing is unusual, or the concordance has mis-classified a repeating field as 1:1
+and it belongs in a one-to-many table instead — the subject of the next article.
+
+## What you learned
+
+- A 1:1 table is the set of `TYPE == "terminal"` rows for one `RDB_TABLE`, all with
+  `TABLE_ID == "TID-00000"`.
+- `pivot_wider(names_from = VARIABLE_NAME, values_from = VALUE)` collapses them to
+  one row per filing — the core of `flatten_table()` / `build_table()`.
+- `add_keys()` prepends the filing's identifying metadata.
+- A `VARIABLE_NAME` that appears more than once per filing breaks the 1:1
+  assumption and points to a one-to-many table.
+
+Next: **"Extracting One-to-Many Tables"** uses `TABLE_ID` to reassemble repeating
+groups like grants and compensation.

@@ -11,7 +11,7 @@ split_urls(urls, group.size = 25, path = ".")
 
 \item{group.size}{Integer batch size.}
 
-\item{year}{Year folder.}
+\item{path}{Directory in which to create the \verb{batches/} subfolder.}
 }
 \value{
 Invisibly the batch list.

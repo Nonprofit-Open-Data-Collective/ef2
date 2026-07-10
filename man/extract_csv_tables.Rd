@@ -19,7 +19,7 @@ DuckDB databases.}
 \item{years}{Integer vector. Tax years to process (e.g., 2009:2024).}
 
 \item{table_names}{Character vector of IRS 990 table names (defaults to
-\code{irs990efile::get_table_names()} if not supplied).}
+\code{\link[=get_table_names]{get_table_names()}} if not supplied).}
 
 \item{ccf}{Data frame. Concordance crosswalk used for variable alignment.}
 

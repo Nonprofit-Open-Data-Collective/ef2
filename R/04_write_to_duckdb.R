@@ -53,6 +53,6 @@ send_flat_xml_to_db <- function(RESULTS, con) {
     }
   }, silent = TRUE)
 
-  cat("  ✅ Data successfully written to DuckDB!\n")
+  cat("  \u2705 Data successfully written to DuckDB!\n")
   invisible(TRUE)
 }
