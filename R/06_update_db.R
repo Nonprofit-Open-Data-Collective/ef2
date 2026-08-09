@@ -198,3 +198,133 @@ merge_databases <- function(year, missing_urls, temp_db_path, output_path, versi
   base::invisible(output_path)
 }
 
+
+
+#' Download an S3-hosted DuckDB archive to a local file
+#'
+#' Performs a plain (sequential/multipart) file download of the archived
+#' `EFILE<year>.duckdb` rather than streaming the whole database through
+#' `httpfs` SQL. For large archives (tens of GB) this is dramatically faster
+#' than a `CREATE TABLE AS SELECT *` copy, and produces a local file that new
+#' filings can be appended to directly (see [append_to_database()]).
+#'
+#' Uses the AWS CLI (`aws s3 cp --no-sign-request`) when available for
+#' multipart parallelism, otherwise falls back to [utils::download.file()].
+#'
+#' @param year Tax year (integer or character).
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#'   Set NULL or "" for the unversioned path.
+#' @param dest Destination path. Defaults to `EFILE<year>.duckdb` in the
+#'   working directory.
+#' @param overwrite Logical; if FALSE (default) and `dest` already exists, the
+#'   download is skipped.
+#' @return Invisibly, the local destination path.
+#' @export
+download_s3_database <- function(year, version = "efile_v2_1", dest = NULL, overwrite = FALSE) {
+  year <- base::as.character(year)
+  version_seg <- if (base::is.null(version) || version == "") "" else base::paste0(version, "/")
+  if (base::is.null(dest)) dest <- base::paste0("EFILE", year, ".duckdb")
+
+  if (base::file.exists(dest) && !overwrite) {
+    base::message("\u2139\ufe0f  File already exists, skipping download: ", dest)
+    return(base::invisible(dest))
+  }
+
+  base::dir.create(base::dirname(dest), showWarnings = FALSE, recursive = TRUE)
+  s3_uri  <- base::paste0("s3://nccs-efile/duckdb/", version_seg, "EFILE", year, ".duckdb")
+  https   <- base::paste0("https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/",
+                          version_seg, "EFILE", year, ".duckdb")
+
+  aws <- base::Sys.which("aws")
+  if (base::nzchar(aws)) {
+    base::message("\U0001F4E5 Downloading via AWS CLI: ", s3_uri, " -> ", dest)
+    status <- base::system2(aws, c("s3", "cp", base::shQuote(s3_uri), base::shQuote(dest),
+                                   "--no-sign-request"))
+    if (!base::identical(status, 0L)) {
+      base::stop("aws s3 cp failed (exit ", status, ") for ", s3_uri)
+    }
+  } else {
+    base::message("\U0001F4E5 Downloading via download.file(): ", https, " -> ", dest)
+    old <- base::options(timeout = 36000L); base::on.exit(base::options(old), add = TRUE)
+    utils::download.file(https, destfile = dest, mode = "wb", quiet = FALSE)
+  }
+  base::message("\u2705 Downloaded ", dest,
+                " (", base::round(base::file.info(dest)$size / 1e9, 2), " GB)")
+  base::invisible(dest)
+}
+
+
+
+#' Append a temporary DuckDB (new filings) into an existing local DuckDB
+#'
+#' Inserts the rows from a temporary "update" database (built by
+#' [build_database()] with `is_update = TRUE`) into a base database in place,
+#' aligning schemas. This is the local counterpart of [merge_databases()]:
+#' pair it with [download_s3_database()] to update a large archive without
+#' streaming the whole thing through `httpfs`.
+#'
+#' @param target_db Path to the base DuckDB to append into (modified in place).
+#' @param temp_db_path Path to the temporary DuckDB with the new filings.
+#' @param tables Character vector of tables to append
+#'   (default `c("KEYS", "FLATXML", "ATTRIBUTES")`).
+#' @return Invisibly, `target_db`.
+#' @export
+append_to_database <- function(target_db, temp_db_path,
+                               tables = base::c("KEYS", "FLATXML", "ATTRIBUTES")) {
+  if (!base::file.exists(target_db))    base::stop("target_db not found: ", target_db)
+  if (!base::file.exists(temp_db_path)) base::stop("temp_db_path not found: ", temp_db_path)
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = target_db)
+  base::on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, base::sprintf("ATTACH '%s' AS tmpdb (READ_ONLY);", temp_db_path))
+  tbls_tmp  <- DBI::dbListTables(con, "tmpdb")
+
+  for (tbl in tables) {
+    if (!(tbl %in% tbls_tmp)) {
+      base::message("\u26a0\ufe0f  Skipping ", tbl, " \u2014 not found in temp DB.")
+      next
+    }
+
+    if (!DBI::dbExistsTable(con, tbl)) {
+      DBI::dbExecute(con, base::sprintf("CREATE TABLE main.%s AS SELECT * FROM tmpdb.%s;", tbl, tbl))
+      n <- DBI::dbGetQuery(con, base::sprintf("SELECT COUNT(*) AS n FROM main.%s;", tbl))$n
+      base::message("\U0001F195 Created ", tbl, " (", n, " rows) from temp DB.")
+      next
+    }
+
+    cols_main <- DBI::dbGetQuery(con, base::sprintf("PRAGMA table_info(main.%s);", tbl))$name
+    cols_tmp  <- DBI::dbGetQuery(con, base::sprintf("PRAGMA table_info(tmpdb.%s);", tbl))$name
+
+    # Add any columns present in the temp DB but missing from the base.
+    for (col in base::setdiff(cols_tmp, cols_main)) {
+      DBI::dbExecute(con, base::sprintf('ALTER TABLE main.%s ADD COLUMN "%s" TEXT;', tbl, col))
+    }
+    all_cols <- base::union(cols_main, cols_tmp)
+
+    select_tmp <- base::paste(
+      "SELECT",
+      base::paste(base::sapply(all_cols, function(c)
+        if (c %in% cols_tmp) base::sprintf('"%s"', c)
+        else base::sprintf('NULL AS "%s"', c)
+      ), collapse = ", "),
+      base::sprintf("FROM tmpdb.%s;", tbl)
+    )
+
+    before <- DBI::dbGetQuery(con, base::sprintf("SELECT COUNT(*) AS n FROM main.%s;", tbl))$n
+    DBI::dbExecute(con, "BEGIN TRANSACTION;")
+    DBI::dbExecute(con, base::sprintf("INSERT INTO main.%s (%s) %s",
+      tbl,
+      base::paste(base::sprintf('"%s"', all_cols), collapse = ", "),
+      select_tmp
+    ))
+    DBI::dbExecute(con, "COMMIT;")
+    after <- DBI::dbGetQuery(con, base::sprintf("SELECT COUNT(*) AS n FROM main.%s;", tbl))$n
+    base::message(base::sprintf("\u2705 Appended %s: %d \u2192 %d rows (+%d)",
+                                tbl, before, after, after - before))
+  }
+
+  DBI::dbExecute(con, "DETACH tmpdb;")
+  base::invisible(target_db)
+}
+

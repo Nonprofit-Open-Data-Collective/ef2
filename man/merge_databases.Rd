@@ -9,7 +9,8 @@ merge_databases(
   missing_urls,
   temp_db_path,
   output_path,
-  version = "efile_v2_1"
+  version = "efile_v2_1",
+  source_db = NULL
 )
 }
 \arguments{
@@ -22,6 +23,11 @@ merge_databases(
 \item{output_path}{Path for final merged DB.}
 
 \item{version}{S3 version subfolder under duckdb/ (default "efile_v2_1").}
+
+\item{source_db}{Optional path/URL of the base ("source") database to merge
+into. Defaults to \code{NULL}, in which case the S3-hosted archive for \code{year}
+(under \code{version}) is used. Pass a local \code{.duckdb} path to merge into an
+already-downloaded archive or for testing.}
 }
 \value{
 Invisibly \code{output_path}.
