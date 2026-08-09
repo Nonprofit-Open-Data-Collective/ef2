@@ -10,7 +10,8 @@ build_database(
   group.size = 25,
   ccf = NULL,
   path = ".",
-  is_update = FALSE
+  is_update = FALSE,
+  workers = NULL
 )
 }
 \arguments{
@@ -27,6 +28,12 @@ resumes from existing batch files in the year's folder.}
 
 \item{is_update}{Logical; if TRUE, this is an incremental update build rather
 than a full-year rebuild.}
+
+\item{workers}{Optional integer number of parallel worker processes. If NULL
+(default) uses the conservative \code{min(4, availableCores()/2)}. Because the
+work is network-bound (each worker mostly waits on XML downloads), setting
+this above the physical core count can substantially raise throughput for
+large jobs. Be considerate of the source S3 endpoint when raising it.}
 }
 \value{
 Invisibly returns the path to the merged DuckDB database.
@@ -39,5 +46,6 @@ database for the specified year.
 \examples{
 \dontrun{
 build_database(2021, urls = urls, group.size = 25, path = "data")
+build_database(2024, urls = urls, path = "data", workers = 10)
 }
 }

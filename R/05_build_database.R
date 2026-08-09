@@ -14,16 +14,22 @@
 #' @param path Directory in which to store year subfolder and database files.
 #' @param is_update Logical; if TRUE, this is an incremental update build rather
 #'   than a full-year rebuild.
+#' @param workers Optional integer number of parallel worker processes. If NULL
+#'   (default) uses the conservative `min(4, availableCores()/2)`. Because the
+#'   work is network-bound (each worker mostly waits on XML downloads), setting
+#'   this above the physical core count can substantially raise throughput for
+#'   large jobs. Be considerate of the source S3 endpoint when raising it.
 #'
 #' @return Invisibly returns the path to the merged DuckDB database.
 #'
 #' @examples
 #' \dontrun{
 #' build_database(2021, urls = urls, group.size = 25, path = "data")
+#' build_database(2024, urls = urls, path = "data", workers = 10)
 #' }
 #' @export
 build_database <- function(year, urls = NULL, group.size = 25,
-                           ccf = NULL, path = ".", is_update=FALSE) {
+                           ccf = NULL, path = ".", is_update=FALSE, workers = NULL) {
 
   # --- Helper: portable in-memory detection ---
   is_in_memory_duckdb <- function(con) {
@@ -54,7 +60,14 @@ build_database <- function(year, urls = NULL, group.size = 25,
   }
 
   # --- Parallel configuration ---
-  max.cores <- min(4, floor(future::availableCores() / 2))
+  # Network-bound work: workers can exceed the physical core count. Cap at the
+  # number of batches so we never spawn idle sessions.
+  if (is.null(workers)) {
+    max.cores <- min(4, floor(future::availableCores() / 2))
+  } else {
+    max.cores <- max(1L, as.integer(workers))
+  }
+  max.cores <- min(max.cores, n_batches)
   on.exit(future::plan(future::sequential), add = TRUE)
   future::plan(future::multisession, workers = max.cores)
 
