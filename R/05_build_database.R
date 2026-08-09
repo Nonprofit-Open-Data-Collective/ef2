@@ -32,6 +32,9 @@ build_database <- function(year, urls = NULL, group.size = 25,
   }
 
   # --- Setup paths and batch structure ---
+  # Coerce year to character so all filename builders below are safe with a
+  # character TaxYear (avoids sprintf("%d", "2021") errors).
+  year <- as.character(year)
   ccf <- prep_concordance(ccf)
   year_path <- normalizePath(file.path(path, year), mustWork = FALSE)
   dir.create(year_path, showWarnings = FALSE, recursive = TRUE)
@@ -84,7 +87,7 @@ build_database <- function(year, urls = NULL, group.size = 25,
     log_msg("Starting worker", worker_id)
 
     worker_db <- normalizePath(
-      file.path(year_path, sprintf("worker_%02d_%d.duckdb", worker_id, year)),
+      file.path(year_path, sprintf("worker_%02d_%s.duckdb", worker_id, year)),
       mustWork = FALSE
     )
     log_msg("Connecting to DuckDB:", worker_db)
@@ -146,8 +149,8 @@ build_database <- function(year, urls = NULL, group.size = 25,
 
   # --- Merge all worker databases ---
   future::plan(future::sequential)
-  main_db <- file.path(year_path, sprintf("EFILE%d.duckdb", year))
-  if(is_update){main_db <- file.path(year_path, sprintf("EFILE%d_UPDATE.duckdb", year))}
+  main_db <- file.path(year_path, paste0("EFILE", year, ".duckdb"))
+  if(is_update){main_db <- file.path(year_path, paste0("EFILE", year, "_UPDATE.duckdb"))}
   message("\n\U0001FA84 Merging ", length(worker_dbs), " worker databases into ", main_db)
   merge_duckdbs(main_db, worker_dbs)
 

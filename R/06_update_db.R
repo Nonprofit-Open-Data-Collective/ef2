@@ -87,22 +87,33 @@ update_db <- function(year, index, path=".", version = "efile_v2_1") {
 #' @param temp_db_path Path to temporary DuckDB with new filings.
 #' @param output_path Path for final merged DB.
 #' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param source_db Optional path/URL of the base ("source") database to merge
+#'   into. Defaults to `NULL`, in which case the S3-hosted archive for `year`
+#'   (under `version`) is used. Pass a local `.duckdb` path to merge into an
+#'   already-downloaded archive or for testing.
 #' @return Invisibly `output_path`.
 #' @export
-merge_databases <- function(year, missing_urls, temp_db_path, output_path, version = "efile_v2_1") {
+merge_databases <- function(year, missing_urls, temp_db_path, output_path, version = "efile_v2_1", source_db = NULL) {
+  # Coerce year to character so filename/URL/log builders never hit sprintf("%d")
+  # with a character TaxYear (a common failure mode when years come from an index).
+  year <- base::as.character(year)
   base::message("\U0001F527 Merging databases for year ", year)
 
-  version_seg <- if (base::is.null(version) || version == "") "" else base::paste0(version, "/")
-  remote_db_url <- base::sprintf(
-    "https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/%sEFILE%d.duckdb",
-    version_seg, year
-  )
-  log_path <- base::sprintf("merge_log_%d.txt", year)
+  if (base::is.null(source_db)) {
+    version_seg <- if (base::is.null(version) || version == "") "" else base::paste0(version, "/")
+    remote_db_url <- base::paste0(
+      "https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/",
+      version_seg, "EFILE", year, ".duckdb"
+    )
+  } else {
+    remote_db_url <- source_db
+  }
+  log_path <- base::paste0("merge_log_", year, ".txt")
   log_conn <- base::file(log_path, open = "a")
 
   start_time <- base::Sys.time()
   base::writeLines(base::sprintf(
-    "\n=== Merge Log for TaxYear %d ===\nStart Time: %s\nMissing URLs: %d\n",
+    "\n=== Merge Log for TaxYear %s ===\nStart Time: %s\nMissing URLs: %d\n",
     year, base::format(start_time, "%Y-%m-%d %H:%M:%S"), base::length(missing_urls)
   ), log_conn)
 
