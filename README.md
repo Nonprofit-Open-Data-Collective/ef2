@@ -9,6 +9,7 @@ Processed files are available on the NCCS website in CSV format: https://nccs.ur
 The ef2 output tables work seamlessly with **panel990**, **fiscal**, **governance**, and other packages in the NODC ecosystem.
 
 ```r
+# pak::pkg_install("nonprofit-open-data-collective/panel990")
 library(panel990)    # build a panel
 
 # 1. Download -> read -> merge -> stack five core tables across four years.
@@ -38,6 +39,7 @@ manifest(panel)          # every step: rows in/out, rules applied
 Add ~50 financial indicators to your panel: 
 
 ```r
+# pak::pkg_install("nonprofit-open-data-collective/fiscal")
 library(fiscal)
 
 # The entire battery of fiscal-health metrics, appended to your data:
@@ -51,8 +53,8 @@ df <- get_debt_assets_ratio( df )
 
 ```r
 # ef2 currently depends on these packages only available on github
-devtools::install_github( 'ultinomics/xmltools' )
-devtools::install_github( 'nonprofit-open-data-collective/ef2' )
+pak::pkg_install( 'ultinomics/xmltools' )
+pak::pkg_install( 'nonprofit-open-data-collective/ef2' )
 ```
 
 ## Usage
