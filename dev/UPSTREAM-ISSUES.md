@@ -88,9 +88,31 @@ Two other hypotheses were tested and **ruled out**, so nobody need revisit them:
 - *`get_table_id()` collapses repeating-group rows.* No. Measured on TY2012,
   `Form990ScheduleRPartIV[1..4]` correctly yields `TID-00001..00004`.
 
-**Still unexplained:** `SR-P04` measured 2.64x inflation in TY2012 downstream,
-yet its header is clean and its `TABLE_ID`s are correct. Something else is
-happening there. Do not assume EF2-6 accounts for all of it.
+**`SR-P04`'s 2.64x is RESOLVED, and it is not an ef2 defect.** Regenerating
+`SR-P04-2012` and diffing against the published CSV: both the header regex and
+`RDB_TABLE` select **exactly the same 467,522 rows**, the header admits nothing
+foreign, and the published file matches row for row with no foreign-part
+columns. The extraction is faithful.
+
+The 2.643 ratio comes from a handful of **pathological source filings**. Rows
+per filing: median 2, mean 32.05, max **32,768**. For
+`OID-201312829349300956`, `FLATXML` itself holds 32,768 distinct `TABLE_ID`s
+from 131,072 cells, with xpaths running `Form990ScheduleRPartIV[1]` through
+`[32768]` -- correctly anchored and correctly indexed -- carrying only **637
+distinct counterparty names**. The filing genuinely contains 32,768 repeating
+groups for 637 entities.
+
+**Consequence for the Schedule R inflation generally: it has TWO causes, and
+only one is fixable here.**
+
+1. Header prefix collision (EF2-6) -- a real defect in this package, affecting
+   `SR-P01` and `SR-P02`. Fixable.
+2. Source filings with massively duplicated repeating groups -- present in the
+   XML before this package sees it, affecting any part. **Not fixable here, ever.**
+
+That vindicates downstream deduplication as permanent handling rather than a
+temporary workaround: `superstructure`'s `dedupe_dyads()` is the correct
+response to cause 2 and should not be retired when EF2-6 is fixed.
 
 **Why this cannot be fully repaired downstream.** `dedupe_dyads()` recovers the
 distinct *counterparties*, but the cross-join reassigned `TABLE_ID`, so the
@@ -300,6 +322,100 @@ audit_table_headers()          # zero rows == no table can capture another's xpa
 
 ---
 
+## Plan — fixing the header collisions
+
+Ordered by evidence. Steps 1 and 2 are independent of each other.
+
+### Step 0 — do not use two-level headers
+
+The obvious repair, giving `SR-P01` the header
+`//IRS990ScheduleR/Form990ScheduleRPartI/NameOfDisregardedEntity`, **fixes the
+leak and breaks the table.** Tested:
+
+| header | matches PartI name | matches PartII name | matches PartI `EIN` | matches PartI `LegalDomicile` |
+|---|---|---|---|---|
+| current | yes | **yes (bug)** | yes | yes |
+| two-level | yes | no | **no** | **no** |
+| anchored | yes | no | yes | yes |
+
+A header names the *repeating group*; pushing it down to one child element
+selects only that child's rows, so the table loses every other column. Rejected.
+
+### Step 1 — select on `RDB_TABLE`, not on a header regex  (recommended)
+
+`flatten_table()` in the same file already does the right thing:
+
+```r
+dplyr::filter( .data$RDB_TABLE == table_name )     # exact, cannot collide
+```
+
+`build_rdb_table()` should do the same, keeping its `TYPE=='terminal'` filter
+and its `TABLE_ID` pivot. Measured on `SR-P01`, terminal cells:
+
+| | `RDB_TABLE ==` | header regex |
+|---|---|---|
+| TY2024 | 247,715 | 247,715 (identical) |
+| TY2012 | 156,696 | **7,477,128** (47.7x) |
+
+This fixes **all three** collision classes at once, because the concordance
+assigns every xpath exactly one `rdb_table` -- including the `T00`/`T01` pairs
+that share a node, which anchoring cannot separate.
+
+**Check before switching:** 0.12% of terminal cells (134,479 of 114M in TY2012;
+186,672 of 168M in TY2024) have a NULL or empty `RDB_TABLE`. Establish what they
+are first -- under a `RDB_TABLE ==` filter they are silently dropped, whereas
+today some of them are silently included.
+
+### Step 2 — if `RDB_TABLE` proves unusable, anchor the regex instead
+
+Append a path separator so the match must land on a segment boundary:
+
+```r
+hd <- paste0( gsub( "//", "/", TABLE.HEADERS[[ table_name ]] ), "/" )
+```
+
+Safe because a header names a repeating group and a terminal row always sits
+below it. Measured effect: **31 misfire pairs -> 9; 603 mis-captured xpaths ->
+75; 17 affected tables -> 9.** A partial fix, not a complete one.
+
+### Step 3 — one outright duplicate header entry
+
+`SK-P05-T01-PROCEDURE-CORRECTIVE-ACT` and `SK-P06-T99-SUPPLEMENTAL-INFO` **both**
+list `//IRS990ScheduleK/Form990ScheduleKPartV`. They absorb each other's rows.
+Neither anchoring nor `RDB_TABLE` makes this entry correct -- remove it from
+`SK-P06`, whose own nodes are `Form990ScheduleKPartVI` and
+`SupplementalInformationDetail`.
+
+### Step 4 — the `T00`/`T01` co-located tables
+
+Seven of the nine residual pairs are a `T01` repeating table and a `T00`
+one-row-per-filing table sharing one XML node (`SG-P02`, `SA-P01`, `SD-P10`,
+`F9-P07`, `SH-P05`). The `T00` tables have **no header entry at all**, so they
+are not built through this path; the `T01` header legitimately matches the node
+and picks up the `T00` variables too. Filing-level totals then land on whichever
+`TABLE_ID` they carry. Step 1 resolves this; Step 2 does not.
+
+### Step 5 — regression test
+
+```r
+audit_table_headers()      # zero rows
+```
+
+**If Step 1 is taken, retarget this function.** It audits the header regex; once
+selection moves to `RDB_TABLE` the header regex no longer decides anything, and
+an audit of the *old* mechanism passing tells you nothing about the new one. The
+equivalent check becomes: does every concordance xpath resolve to exactly one
+`rdb_table`, and is `RDB_TABLE` populated for every terminal cell.
+
+### Step 6 — republish
+
+Affected years are **TY2009-2012**, plus the 5 mis-captured xpaths that reach
+TY2013+. Regenerate and diff against the published CSVs before replacing them --
+`SR-P04-2012` was diffed this way and turned out to be faithful, so do not
+assume a table is corrupt merely because it appears in the audit.
+
+---
+
 ## Explicitly NOT ef2 issues
 
 Filed here only to stop them being re-filed as extraction bugs.
@@ -326,7 +442,7 @@ are independently sound. Judgment per guard:
 | Guard | Verdict | Reasoning |
 |---|---|---|
 | `drop_empty_alters()` | **Keep — generally robust** | Rests on a claim true regardless of cause: a dyad row naming no counterparty is not an edge. Earned its place on a defect unrelated to Schedule R — 1,167 Schedule N Part I rows carrying a fair market value but naming nobody. Not a mask. |
-| `dedupe_dyads()` | **Keep — but it is a safety net, not the fix** | Its mechanism is sound: it dedupes on the full substantive contract, so it cannot collapse two genuinely distinct relationships. But it exists because of EF2-1 and it *does* make pre-2013 data look usable while `row_seq` is quietly destroyed. It must not become the reason EF2-1 stays open. It reports its inflation ratio on every run — keep that message loud. |
+| `dedupe_dyads()` | **Keep — permanently** | Revised after the `SR-P04` diff. Schedule R inflation has two causes: the header collision (EF2-6, fixable here) and source filings carrying tens of thousands of duplicated repeating groups (not fixable here, ever — one TY2012 filing has 32,768 groups for 637 entities). Deduplication is the only possible response to the second, so this is correct handling rather than a workaround, and it should survive the EF2-6 fix. Its mechanism is sound: it dedupes on the full substantive contract and cannot collapse two genuinely distinct relationships. Keep its inflation-ratio message loud. |
 | `ensure_table_cols()` | **Keep — generally robust** | Pads a table with columns it is missing for that year. Column availability genuinely drifts across schema versions; this is normal variation, not a defect. |
 | `validate_dyad()` / `validate_person()` | **Keep** | Contract assertions about this package's own output. Unrelated to source quality. |
 
