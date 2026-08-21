@@ -78,3 +78,20 @@ URLs. `xpath_reports/` is empty as a result.
 `superstructure` (`../superstructure`) reads the `efile_v2_2` CSV tables and
 maintains its own notes in `dev/`. When changing table structure or column
 names, that repo's `inst/extdata/concordance.csv` and detectors are affected.
+
+## Before changing table extraction
+
+`build_rdb_table()` selects rows with an **unanchored** `grepl()` against
+`TABLE.HEADERS`, so a header that is a substring of another captures the wrong
+table's rows. 17 tables are currently affected (EF2-6).
+
+```r
+audit_table_headers()   # zero rows == no header can capture another table's xpaths
+```
+
+That check needs no data and no database. Run it after any change to
+`TABLE.HEADERS`, `get_header()`, or the selection step.
+
+Note `devtools::document()` currently fails here — the declared dependency
+`aws.signature` is not installed — so NAMESPACE may need a manual export until
+that is resolved.

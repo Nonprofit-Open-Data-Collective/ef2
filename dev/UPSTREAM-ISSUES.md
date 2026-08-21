@@ -70,13 +70,27 @@ DuckDB and current concordance yields a clean `SR-P01`, the pipeline is already
 fixed and the task is a re-publish, not a code change. That is a cheap test and
 it should precede any other work here.
 
-**Hypothesis, not yet confirmed:** `get_table_id()` in `R/99_utils.R` derives
-`TABLE_ID` from the *last* bracketed index in the xpath (`tail(matches, 1)`).
-For Schedule R the repeating group sits at the part level, so
-`Form990ScheduleRPartI[1]` and `Form990ScheduleRPartII[1]` both yield
-`TID-00001`. If variables from both parts reach one `pivot_wider()` keyed on
-`OBJECTID` + `TABLE_ID`, rows from different parts collide. Worth confirming
-before acting on.
+**CONFIRMED — see EF2-6.** The mechanism is the unanchored `grepl()` in
+`build_rdb_table()`'s row-selection step. `SR-P01`'s header
+`//IRS990ScheduleR/Form990ScheduleRPartI` is a *substring* of `PartII`,
+`PartIII` and `PartIV`, so building `SR-P01` admits all four parts. `SR-P02`
+likewise admits `PartIII`. `SR-P03` and `SR-P04` are clean.
+
+That also explains why the defect stops at 2013: the post-2013 headers are
+`IdDisregardedEntitiesGrp` and `IdRelatedTaxExemptOrgGrp`, which share no
+prefix.
+
+Two other hypotheses were tested and **ruled out**, so nobody need revisit them:
+
+- *`KEYS` has duplicate `OBJECTID`s, inflating the `right_join()`.* No. TY2009
+  and TY2012 both have exactly one `KEYS` row per `OBJECTID`. (The dedupe in
+  `generate_xpath_report()` is defensive, not evidence of a real duplicate.)
+- *`get_table_id()` collapses repeating-group rows.* No. Measured on TY2012,
+  `Form990ScheduleRPartIV[1..4]` correctly yields `TID-00001..00004`.
+
+**Still unexplained:** `SR-P04` measured 2.64x inflation in TY2012 downstream,
+yet its header is clean and its `TABLE_ID`s are correct. Something else is
+happening there. Do not assume EF2-6 accounts for all of it.
 
 **Why this cannot be fully repaired downstream.** `dedupe_dyads()` recovers the
 distinct *counterparties*, but the cross-join reassigned `TABLE_ID`, so the
@@ -207,6 +221,82 @@ Give `generate_xpath_report()` a `db_path` argument that accepts a URL, skip the
 rather than opening the file directly. `process_xpaths()` then works over the
 published archive for all years without a local copy, and `xpath_reports/` --
 currently empty -- can be populated for 2009-2024.
+
+---
+
+## EF2-6 — `build_rdb_table()` selects rows with an unanchored regex
+
+**This is the mechanism behind EF2-1, and it is not confined to Schedule R.**
+
+`build_rdb_table()` picks a table's rows like this:
+
+```r
+hd <- gsub( "//", "/", TABLE.HEADERS[[ table_name ]] )
+xpath_versions <- paste0( hd, collapse = "|" )
+dplyr::filter( grepl( xpath_versions, .data$XPATH2 ) )
+```
+
+`grepl()` matches **anywhere in the string**. IRS part naming is built from
+Roman numerals, so headers are routinely substrings of one another:
+
+```
+Form990ScheduleRPartI   is a substring of  PartII, PartIII, PartIV
+Form990ScheduleAPartI   is a substring of  PartII, PartIII, PartIVGrp
+Form990ScheduleHPartV   is a substring of  PartVSectionA, PartVSectionB, PartVI
+Form990ScheduleKPartI   is a substring of  PartII
+```
+
+Any table whose header is a prefix of another silently absorbs that table's
+rows.
+
+### Measured blast radius
+
+`audit_table_headers()` (added in `R/10_audit_table_headers.R`) runs every
+header regex against every concordance xpath and compares the `rdb_table` the
+concordance assigns. Against the packaged concordance:
+
+- **31 misfire pairs across 17 tables**
+- **603 xpaths captured by the wrong table** (542 distinct)
+
+Largest offenders — and note Schedule R is *not* the worst:
+
+| xpaths | table being built | absorbs |
+|---|---|---|
+| 100 | `SA-P01-T01-PUBLIC-CHARITY-STATUS` | `SA-P03-T00-SUPPORT_SCHEDULE_509` |
+| 60 | `SA-P01-T01-PUBLIC-CHARITY-STATUS` | `SA-P02-T00-SUPPORT_SCHEDULE_170` |
+| 46 | `SH-P05-T01-HOSPITAL-FACILITY` | `SH-P99-T00-FAP-COMMUNITY-BENEFIT-POLICY` |
+| 42 | `SH-P05-T01-HOSPITAL-FACILITY` | `SH-P05-T00-FAP-COMMUNITY-BENEFIT-POLICY` |
+| 32 | `SR-P01-T01-ID-DISREGARDED-ENTITIES` | `SR-P03-...-TAXABLE-PARTNERSHIP` |
+| 30 | `SR-P01-T01-ID-DISREGARDED-ENTITIES` | `SR-P04-...-TAXABLE-CORPORATION` |
+| 28 | `SR-P01-T01-ID-DISREGARDED-ENTITIES` | `SR-P02-...-RLTD-TAX-EXEMPED-ORGS` |
+| 19 | `SK-P01-T01-BOND-ISSUES` | `SK-P02-T01-BOND-PROCEEDS` |
+
+Mostly legacy, but **not exclusively**: of the mis-captured xpaths carrying a
+parseable version, 280 end at TY2012 or earlier and **5 still appear in TY2013
+or later** — e.g. `Form990ScheduleAPartIVGrp/ExplanationTxt`, which
+`Form990ScheduleAPartI` still matches, and `HospitalFacilitiesGrp/FacilityNum`.
+So this is not purely historical.
+
+### The opposite failure
+
+The same audit finds headers that do **not** match xpaths the concordance
+assigns to their own table — columns that silently never appear. Currently 2
+tables, 12 xpaths, led by `F9-P07-T01-COMPENSATION` with 9.
+
+### Fix
+
+Anchor the match. The header identifies a node in a path, so the comparison
+should be on a path *segment boundary* rather than a bare substring — e.g.
+require the match be followed by `/` or end-of-string, or compare against
+`TABLE_HEADER` (already computed by `get_header()`) with `%in%` instead of
+regex. Escaping the header for regex use would be prudent regardless.
+
+Whatever the fix, `audit_table_headers()` should return zero rows afterwards —
+it is a regression test that needs no data.
+
+```r
+audit_table_headers()          # zero rows == no table can capture another's xpaths
+```
 
 ---
 
