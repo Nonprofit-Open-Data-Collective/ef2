@@ -374,10 +374,9 @@ This fixes **all three** collision classes at once, because the concordance
 assigns every xpath exactly one `rdb_table` -- including the `T00`/`T01` pairs
 that share a node, which anchoring cannot separate.
 
-**Check before switching:** 0.12% of terminal cells (134,479 of 114M in TY2012;
-186,672 of 168M in TY2024) have a NULL or empty `RDB_TABLE`. Establish what they
-are first -- under a `RDB_TABLE ==` filter they are silently dropped, whereas
-today some of them are silently included.
+**The 0.12% of cells with no `RDB_TABLE` have been checked -- see EF2-7. The
+switch is safe, with one variable to rescue first (`ExpenseAccount`, 194 values
+in TY2012).**
 
 ### Step 2 — if `RDB_TABLE` proves unusable, anchor the regex instead
 
@@ -457,6 +456,59 @@ Affected years are **TY2009-2012**, plus the 5 mis-captured xpaths that reach
 TY2013+. Regenerate and diff against the published CSVs before replacing them --
 `SR-P04-2012` was diffed this way and turned out to be faithful, so do not
 assume a table is corrupt merely because it appears in the audit.
+
+---
+
+## EF2-7 — xpaths absent from the concordance leak in as stray columns
+
+Found while checking what the `RDB_TABLE ==` switch (EF2-6 Step 1) would drop.
+
+`RDB_TABLE` is empty on 0.12% of terminal cells — 134,479 of 114M in TY2012,
+186,672 of 168M in TY2024. **These are cells whose xpath is not in the
+concordance at all.** All 125 distinct `VARIABLE_NAME`s on them are absent from
+the concordance, because the flattener falls back to the raw XML element name:
+`AddressOfContractor`, `FinancialDerivatives`, `Land`, `Buildings`,
+`IRS990ScheduleG`. So this is a **concordance coverage gap**, not a
+table-assignment gap.
+
+By xpath depth, TY2012:
+
+| depth | cells | paths | what they are |
+|---|---|---|---|
+| 3 | 10,447 | 17 | the schedule **root node itself**, flagged terminal — `/Return/ReturnData/IRS990ScheduleG`, `/Return/ReturnData/CompensationExplanation` |
+| 4 | 101,103 | 94 | real leaves under an unmapped parent |
+| 5-6 | 22,929 | 31 | deeper leaves |
+
+79% carry no value at all: they are empty or container elements.
+
+### Two populations, and only one is visible today
+
+**Swept into a published table** by the header regex — 19 paths, 3,854 cells,
+of which **194 carry a value**. These become stray columns named after raw XML
+elements. Confirmed in the published file: `F9-P07-T02-CONTRACTORS-2012.CSV`
+has 30 columns and the 30th is **`AddressOfContractor`** (1,441 cells, none
+populated), sitting after the concordance-ordered columns because `relocate()`
+does not know about it.
+
+All 194 populated cells are a single variable: **`ExpenseAccount`**, swept into
+`F9-P07-T01-COMPENSATION-HCE-EZ`. Every other stray column is entirely empty.
+
+**Not swept anywhere** — 123 paths, 130,625 cells, **27,753 carrying a value**.
+These appear in no published table today and are unaffected by either fix. This
+is the larger and quieter problem: real filed data that no table exposes because
+the xpath was never added to the concordance.
+
+### Consequence for EF2-6 Step 1
+
+Switching selection to `RDB_TABLE ==` **drops all 19 stray columns**, 18 of them
+entirely empty. That is a fix, not a regression — those columns should never
+have been in the files.
+
+**One thing to rescue first:** `ExpenseAccount` carries 194 real values in
+TY2012. Add its xpath to the concordance so it gets a proper variable name and
+`rdb_table` before the switch, or those values are silently lost. Dropping an
+unmapped variable is the wrong repair when the variable holds data; mapping it
+is the right one.
 
 ---
 
