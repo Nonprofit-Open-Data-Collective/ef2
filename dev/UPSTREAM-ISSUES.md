@@ -341,16 +341,29 @@ leak and breaks the table.** Tested:
 A header names the *repeating group*; pushing it down to one child element
 selects only that child's rows, so the table loses every other column. Rejected.
 
-### Step 1 — select on `RDB_TABLE`, not on a header regex  (recommended)
+### Step 1 — swap the FILTER inside `build_rdb_table()`  (recommended)
 
-`flatten_table()` in the same file already does the right thing:
+**This is a one-line filter change, not a function replacement.** The two
+builders are not interchangeable. `extract_csv_tables()` dispatches by table
+type:
+
+```r
+purrr::walk( t00, build_table,     year, con, ccf )                   # 66 one-row tables
+purrr::walk( t01, build_rdb_table, year, table_headers, con, ccf )    # 62 one-to-many tables
+```
+
+`build_table()` / `flatten_table()` handle **one row per filing** and have no
+`TABLE_ID` pivot, so they cannot build a 1:M table -- pointing them at `SR-P04`
+would collapse 467,522 repeating-group rows into 14,583. What they do have is
+the correct selection:
 
 ```r
 dplyr::filter( .data$RDB_TABLE == table_name )     # exact, cannot collide
 ```
 
-`build_rdb_table()` should do the same, keeping its `TYPE=='terminal'` filter
-and its `TABLE_ID` pivot. Measured on `SR-P01`, terminal cells:
+So: keep `build_rdb_table()`, keep its `TYPE=='terminal'` filter and its
+`TABLE_ID` pivot, and replace only its `grepl()` line with that one. Measured on
+`SR-P01`, terminal cells:
 
 | | `RDB_TABLE ==` | header regex |
 |---|---|---|
@@ -395,17 +408,48 @@ are not built through this path; the `T01` header legitimately matches the node
 and picks up the `T00` variables too. Filing-level totals then land on whichever
 `TABLE_ID` they carry. Step 1 resolves this; Step 2 does not.
 
-### Step 5 — regression test
+### Step 5 — regression test, and what happens to it
 
 ```r
 audit_table_headers()      # zero rows
 ```
 
-**If Step 1 is taken, retarget this function.** It audits the header regex; once
-selection moves to `RDB_TABLE` the header regex no longer decides anything, and
-an audit of the *old* mechanism passing tells you nothing about the new one. The
-equivalent check becomes: does every concordance xpath resolve to exactly one
-`rdb_table`, and is `RDB_TABLE` populated for every terminal cell.
+Use this **if Step 2 is taken** (anchoring), where the header regex still
+decides selection and the audit is a genuine regression test.
+
+**If Step 1 is taken, this function becomes obsolete, not merely retargeted.**
+`TABLE.HEADERS` has exactly one consumer in the package -- `build_rdb_table()`.
+(The `TABLE_HEADER` column in `FLATXML` is computed per row by `get_header()`
+directly from the xpath, and does not read the hand-maintained list.) Swap that
+filter and the list stops deciding anything at all; an audit of it passing would
+prove nothing about the pipeline. Retire it, or keep it only as documentation of
+a retired mechanism, and replace the regression test with:
+
+- is `RDB_TABLE` non-empty for every terminal cell?
+- does every concordance xpath map to exactly one `rdb_table`?
+
+### On missing headers -- checked, and mostly not the problem
+
+The list is **structurally complete**: 62 one-to-many tables in the concordance,
+62 entries in `TABLE.HEADERS`, a clean 1:1. No 1:M table lacks an entry, no
+entry names a table the concordance does not know, and no `T00` table carries a
+superfluous entry. **None of the 31 collisions is caused by a missing header** --
+every one is caused by a header that is present but short enough to be a prefix
+of another.
+
+Missing header *elements within* an entry are a real but separate defect, and
+they cause the opposite failure -- columns that silently never appear:
+
+| table | unmatched xpaths | what the header list is missing |
+|---|---|---|
+| `F9-P07-T01-COMPENSATION` | 9 | the whole `/Return/ReturnData/CompensationExplanation/...` root; its headers only cover `IRS990/Form990PartVIISection*` |
+| `SH-P05-T99-SUPPLEMENTAL-INFO` | 3 | `IRS990ScheduleH/SupplementalInformationDetail` |
+
+Those 12 variables are absent from the published tables today. **Step 1 fixes
+them too**, and for free: `RDB_TABLE` is assigned from the concordance during
+flattening, so it does not care whether anyone remembered to add an xpath to a
+hand-maintained list. Step 2 does not fix them -- anchoring a header that was
+never there changes nothing.
 
 ### Step 6 — republish
 
