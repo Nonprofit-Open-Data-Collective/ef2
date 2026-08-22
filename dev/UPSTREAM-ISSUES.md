@@ -324,6 +324,11 @@ audit_table_headers()          # zero rows == no table can capture another's xpa
 
 ## Plan — fixing the header collisions
 
+> **Implementation plan: `dev/PLAN-fix-build-rdb-table.md`.** That file carries
+> the code change, the pre-flight, the diff protocol with expected outcomes, and
+> the republish order. What follows is the reasoning behind it — why the obvious
+> repair fails, and what each option does and does not fix.
+
 Ordered by evidence. Steps 1 and 2 are independent of each other.
 
 ### Step 0 — do not use two-level headers
