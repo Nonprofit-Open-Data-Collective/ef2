@@ -75,22 +75,46 @@ build_table <- function( table_name, year, con, cc_file, post_to_s3 = FALSE ) {
 #'
 #' @param table_name Character table id.
 #' @param year Integer year.
-#' @param TABLE.HEADERS Named list of header xpaths per table.
+#' @param TABLE.HEADERS Named list of header xpaths per table. Used only when
+#'   `selection = "header"`; the default path ignores it.
+#' @param selection Row-selection strategy. `"rdb_table"` (default) filters on
+#'   the `RDB_TABLE` column assigned during flattening -- exact, and immune to
+#'   the header-prefix collisions described in EF2-6. `"header"` reproduces the
+#'   legacy unanchored regex, for diffing old against new output only.
 #' @param con DBI connection.
 #' @param cc_file Concordance crosswalk.
 #' @param post_to_s3 Logical export flag.
 #' @return Invisibly the lazy tibble.
 #' @export
-build_rdb_table <- function( table_name, year, TABLE.HEADERS, con, cc_file, post_to_s3 = FALSE ) {
+build_rdb_table <- function( table_name, year, TABLE.HEADERS, con, cc_file,
+                             post_to_s3 = FALSE,
+                             selection = c( "rdb_table", "header" ) ) {
 
-  hd <- TABLE.HEADERS[[ table_name ]]
-  hd <- gsub( "//", "/", hd )
-  xpath_versions <- paste0( hd, collapse = "|" )
-
+  selection <- match.arg( selection )
   db <- dplyr::tbl( con, paste0( "EFILE", year, ".FLATXML" ) )
 
-  wide_xx <- db %>%
-    dplyr::filter( grepl( xpath_versions, .data$XPATH2 ) ) %>%
+  if ( selection == "rdb_table" ) {
+    # RDB_TABLE is assigned during flattening from the concordance, so every
+    # xpath resolves to exactly one table and selection cannot collide.
+    #
+    # This replaces an unanchored grepl() over TABLE.HEADERS. Because IRS part
+    # names are Roman-numeral based, headers were routinely substrings of one
+    # another -- Form990ScheduleRPartI matches PartII, PartIII and PartIV -- so
+    # a table silently absorbed other tables rows. Measured on SR-P01 terminal
+    # cells: TY2012 7,477,128 by header regex against 156,696 by RDB_TABLE;
+    # TY2024 identical either way. 31 collisions across 17 tables in total.
+    # See dev/UPSTREAM-ISSUES.md EF2-6 and dev/PLAN-fix-build-rdb-table.md.
+    sel <- db %>% dplyr::filter( .data$RDB_TABLE == table_name )
+  } else {
+    # LEGACY, retained only to reproduce pre-fix output for diffing.
+    # The regex MUST be built outside the filter: dbplyr cannot translate
+    # paste0(collapse=) to SQL, so an inline paste0 fails at execution.
+    hd <- gsub( "//", "/", TABLE.HEADERS[[ table_name ]] )
+    xpath_versions <- paste0( hd, collapse = "|" )
+    sel <- db %>% dplyr::filter( grepl( xpath_versions, .data$XPATH2 ) )
+  }
+
+  wide_xx <- sel %>%
     dplyr::filter( .data$TYPE == "terminal" ) %>%
     dplyr::select( .data$OBJECTID, .data$TABLE_ID, .data$VARIABLE_NAME, .data$VALUE ) %>%
     tidyr::pivot_wider( 
@@ -109,6 +133,20 @@ build_rdb_table <- function( table_name, year, TABLE.HEADERS, con, cc_file, post
     unique()
 
   new.order <- new.order[ new.order %in% colnames( wide_xx ) ]
+
+  # Under selection = "rdb_table" every surviving column must be a key, TABLE_ID
+  # or a concordance variable. That was NOT true of the header regex: xpaths
+  # absent from the concordance fell back to the raw XML element name and rode
+  # in as stray columns -- AddressOfContractor is column 30 of the published
+  # F9-P07-T02-CONTRACTORS-2012.CSV. Warn rather than stop; a surprise here is
+  # worth surfacing but not worth aborting a multi-year rebuild over.
+  stray <- setdiff( colnames( wide_xx ), c( key.names, "TABLE_ID", new.order ) )
+  if ( length( stray ) ) {
+    warning( sprintf( "%s-%s: %d column(s) not in the concordance: %s",
+                      table_name, year, length( stray ),
+                      paste( stray, collapse = ", " ) ), call. = FALSE )
+  }
+
   wide_xx <- wide_xx %>% dplyr::relocate( c( key.names, "TABLE_ID", new.order ) )
 
   if ( post_to_s3 ) {

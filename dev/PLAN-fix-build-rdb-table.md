@@ -15,6 +15,12 @@ has no `TABLE_ID` pivot, so pointing it at a one-to-many table would collapse
 
 ---
 
+> **Steps 1 and 2 are DONE (2026-08-22).** Step 1 landed upstream in
+> `irs-efile-master-concordance-file` (the concordance here is a generated
+> artifact — see the note in Step 1). Step 2 is implemented and validated; see
+> the banner on EF2-6 in `dev/UPSTREAM-ISSUES.md` for the measured diffs.
+> **Steps 3, 4 (remaining tables), 5 and 6 are open.**
+
 ## Step 1 — rescue `ExpenseAccount` first  (blocking)
 
 `/Return/ReturnData/IRS990EZ/CompensationOfHighestPaidEmpl/ExpenseAccount` is
@@ -68,8 +74,12 @@ build_rdb_table <- function( table_name, year, TABLE.HEADERS, con, cc_file,
     sel <- db %>% dplyr::filter( .data$RDB_TABLE == table_name )
   } else {
     # LEGACY. Retained only to reproduce pre-fix output for diffing.
+    # Build the regex OUTSIDE the filter: dbplyr cannot translate
+    # paste0(collapse=) to SQL, and an inline paste0 fails at execution with
+    # "`collapse` not supported in DB translation of `paste()`".
     hd <- gsub( "//", "/", TABLE.HEADERS[[ table_name ]] )
-    sel <- db %>% dplyr::filter( grepl( paste0( hd, collapse = "|" ), .data$XPATH2 ) )
+    xpath_versions <- paste0( hd, collapse = "|" )
+    sel <- db %>% dplyr::filter( grepl( xpath_versions, .data$XPATH2 ) )
   }
 
   wide_xx <- sel %>%

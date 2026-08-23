@@ -248,6 +248,31 @@ currently empty -- can be populated for 2009-2024.
 
 ## EF2-6 — `build_rdb_table()` selects rows with an unanchored regex
 
+> **FIXED 2026-08-22.** `build_rdb_table()` now selects on `RDB_TABLE` and takes
+> a `selection` argument (`"rdb_table"` default, `"header"` for diffing).
+> Validated against local TY2012/TY2013 archives; results below. The published
+> CSVs are **not** yet regenerated — that is Step 6 and is still open.
+>
+> | table | year | header | rdb_table |
+> |---|---|---|---|
+> | `SR-P01` | 2012 | 765,251 rows / 96 cols | **15,871 / 34** (−97.9%) |
+> | `SR-P01` | 2013 | 18,784 / 34 | 18,784 / 34 (identical) |
+> | `SR-P04` | 2012 | 467,522 / 37 | 467,522 / 37 (identical) |
+> | `SA-P01` | 2012 | 28,490 / 26 | 26,310 / 25 |
+> | `SA-P01` | 2013 | 71,444, **inflation 1.439** | 27,438, **inflation 1.001** |
+> | `F9-P07-T01` | 2012 | 2,935,442 / 33 | 2,935,943 / **37** |
+>
+> Every outcome falls in the protocol's expected column. `SR-P04` identical
+> confirms it was never affected. `F9-P07-T01` **gains** four columns —
+> `F9_07_COMP_DTK_EXPL_*`, the `CompensationExplanation` root its header list
+> never covered — and 501 rows with them, which is the missing-header fix
+> adding data rather than a surprise.
+>
+> **It also closes the SA-P01 TY2013 blip**, recorded downstream as unexplained:
+> the legacy path reproduces the 1.44 inflation exactly and the fix returns
+> 1.001. 2013 is the Schedule A naming transition, so legacy and `*Grp` filings
+> coexist and SA-P01's header list carries both spellings.
+
 **This is the mechanism behind EF2-1, and it is not confined to Schedule R.**
 
 `build_rdb_table()` picks a table's rows like this:
@@ -514,6 +539,44 @@ TY2012. Add its xpath to the concordance so it gets a proper variable name and
 `rdb_table` before the switch, or those values are silently lost. Dropping an
 unmapped variable is the wrong repair when the variable holds data; mapping it
 is the right one.
+
+---
+
+## EF2-8 — two dyadic rosters with EINs reach no published table
+
+`AffiliateListing` and `AffiliatedGroupSchedule` are **absent from the
+concordance entirely** — zero rows for either. Both sit at `/Return/ReturnData/`
+top level rather than under an `IRS990ScheduleX` node, which is likely why they
+were never mapped.
+
+Both are relationship rosters, and both carry a **counterparty EIN on 100% of
+rows** — better identifier coverage than most tables that *are* published.
+
+Extracted directly from `EFILE2023.duckdb` / `EFILE2013.duckdb`:
+
+| source | TY2023 rows | filers | distinct counterparties |
+|---|---|---|---|
+| `AffiliateListing/AffiliateListingGrp` | 3,903 | 138 | 3,466 |
+| `AffiliatedGroupSchedule/AffiliatedScheduleGrp` | 2,321 | 240 | 622 |
+| (same, TY2013) | 1,070 / 652 | 99 / 121 | 1,040 / 339 |
+
+`AffiliateListing` is the group-return roster: name, EIN, name control, full
+address, filed by the parent of a group ruling. `AffiliatedGroupSchedule` is the
+Schedule C Part II-A affiliated-group lobbying table — member EIN, name, address
+and the lobbying split (direct, grassroots, nontaxable, share of excess
+expenditure). That second one is an **advocacy coalition roster**, and nothing
+else on the 990 names coalition members with identifiers.
+
+Volumes are small, but 100% EIN coverage makes them unusually clean edges, and
+they are structurally different from Schedule R: a group-ruling roster and a
+lobbying coalition are not related-organization disclosures.
+
+Working extraction SQL exists at `~/Documents/ef2/aff-2023.R` and
+`schedc-2023.R`, handling both the pre- and post-2013 element spellings.
+
+**Action:** add both to the concordance with `rdb_table` assignments, then they
+flow into published tables through the normal path. Downstream, they become two
+new detectors in `superstructure`.
 
 ---
 
