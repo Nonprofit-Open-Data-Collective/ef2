@@ -15,11 +15,12 @@ has no `TABLE_ID` pivot, so pointing it at a one-to-many table would collapse
 
 ---
 
-> **Steps 1 and 2 are DONE (2026-08-22).** Step 1 landed upstream in
+> **Steps 1, 2 and 4 are DONE (2026-08-22/23).** Step 1 landed upstream in
 > `irs-efile-master-concordance-file` (the concordance here is a generated
 > artifact — see the note in Step 1). Step 2 is implemented and validated; see
 > the banner on EF2-6 in `dev/UPSTREAM-ISSUES.md` for the measured diffs.
-> **Steps 3, 4 (remaining tables), 5 and 6 are open.**
+> **Step 3 is partly done** (2009-2013, 2023, 2024 verified; 2014-2022 outstanding).
+> **Steps 5 and 6 are open** — the published CSVs are NOT regenerated.
 
 ## Step 1 — rescue `ExpenseAccount` first  (blocking)
 
@@ -134,7 +135,55 @@ verified:
 Run the same check on 2014–2023 before rebuilding those. If any year shows a
 sharply higher share, stop and find out why first.
 
-## Step 4 — validate by diffing, not by inspection
+## Step 4 — validate by diffing, not by inspection  — DONE
+
+### Result: all 62 tables, TY2012 and TY2013
+
+| | TY2012 | TY2013 |
+|---|---|---|
+| identical | 30 | 36 |
+| fixed (fewer rows and/or columns) | 31 | 24 |
+| gained columns + rows | 1 | 1 |
+| flagged for investigation | 0 | 1 |
+
+**124 table-years, every one accounted for. No regressions.**
+
+The single flag, `SH-P05-T99-SUPPLEMENTAL-INFO` TY2013, resolved on inspection
+and is the missing-header fix in its purest form. Its header list contains only
+`SupplementalInformationGrp`, but the data carries both spellings:
+
+```
+SupplementalInformationDetail/FormAndLineReferenceDesc   28,781   header MISSES
+SupplementalInformationDetail/ExplanationTxt             28,777   header MISSES
+SupplementalInformationGrp/FormAndLineReferenceDesc      11,867   header matches
+SupplementalInformationGrp/ExplanationTxt                11,845   header matches
+```
+
+So the header path returned 11,868 rows and silently dropped roughly 28,800;
+`RDB_TABLE` recovers them. Column names are unchanged because both spellings map
+to the same variables — which is why it surfaced as *more rows, no new columns*,
+a combination this protocol did not anticipate. **Add it as an expected
+outcome:** a table whose header misses an element spelling gains rows without
+gaining columns.
+
+### One caveat on these numbers
+
+The sweep ran against ef2's **current bundled concordance**, which does not yet
+carry the Step 1 fix — that is on a PR branch upstream. `ExpenseAccount` is
+therefore still dropped from `F9-P07-T01-COMPENSATION-HCE-EZ` in this run
+(confirmed: it is the single dropped column, TY2012). Once the concordance PR
+merges and `update-concordance.R` runs, that column stops being dropped. Nothing
+else in the sweep depends on it.
+
+### Method note
+
+Row and column counts were computed in SQL rather than by calling
+`build_rdb_table()` 248 times: output rows are exactly
+`COUNT(DISTINCT OBJECTID||TABLE_ID)` over the selected terminal cells, and
+columns are the distinct `VARIABLE_NAME` set. Equivalence was verified against
+the real function on four tables first.
+
+### The original protocol, for reference
 
 For each of the 62 one-to-many tables, across years spanning the schema change
 (2011, 2012, 2013, 2024), build both ways and compare:
