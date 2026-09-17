@@ -52,22 +52,25 @@ add_keys <- function( db_tbl, table_name, year, cc_file, con ) {
 #' @param year Integer year.
 #' @param con DBI connection.
 #' @param cc_file Concordance crosswalk.
-#' @param post_to_s3 Logical, if TRUE write CSV to S3 using DuckDB COPY.
+#' @param post_to_s3 Logical, if TRUE write to S3 using DuckDB COPY.
+#' @param output One of `"csv"` (default, unchanged behaviour), `"parquet"`, or
+#'   `"both"`. Both formats are written from one materialised temp table, so the
+#'   Parquet file is never a re-parse of the CSV. See [write_table_output()].
+#' @param ... Further arguments passed to [write_table_output()], e.g.
+#'   `normalize_empty`, `sort_key`, `row_group_size`.
 #' @return Invisibly the lazy tibble.
 #' @export
-build_table <- function( table_name, year, con, cc_file, post_to_s3 = FALSE ) {
+build_table <- function( table_name, year, con, cc_file, post_to_s3 = FALSE,
+                         output = c( "csv", "parquet", "both" ), ... ) {
 
+  output  <- match.arg( output )
   wide_00 <- flatten_table( table_name = table_name, year = year, con = con )
   wide_00 <- add_keys( db_tbl = wide_00, table_name = table_name, year = year, cc_file = cc_file, con = con )
 
-  if ( post_to_s3 ) {
-    write_csv_to_s3( db_tbl = wide_00, table_name = table_name, year = year, con = con )
-  } else {
-    fpath <- paste0( "CSV/", table_name, "-", year, ".CSV" ) 
-    wide_00 %>% dplyr::compute( "TEMP", temporary = TRUE, overwrite = TRUE )
-    SQL <- paste0( "COPY TEMP TO '", fpath, "' WITH ( HEADER, DELIMITER ',' );" )
-    DBI::dbExecute( con, SQL )
-  }
+  dest <- if ( post_to_s3 ) s3_public_base() else "CSV/"
+  write_table_output( db_tbl = wide_00, table_name = table_name, year = year,
+                      con = con, output = output, dest = dest, ... )
+
   return( invisible( wide_00 ) )
 }
 
@@ -84,11 +87,19 @@ build_table <- function( table_name, year, con, cc_file, post_to_s3 = FALSE ) {
 #' @param con DBI connection.
 #' @param cc_file Concordance crosswalk.
 #' @param post_to_s3 Logical export flag.
+#' @param output One of `"csv"` (default, unchanged behaviour), `"parquet"`, or
+#'   `"both"`. Both formats are written from one materialised temp table, so the
+#'   Parquet file is never a re-parse of the CSV. See [write_table_output()].
+#' @param ... Further arguments passed to [write_table_output()], e.g.
+#'   `normalize_empty`, `sort_key`, `row_group_size`.
 #' @return Invisibly the lazy tibble.
 #' @export
 build_rdb_table <- function( table_name, year, TABLE.HEADERS, con, cc_file,
                              post_to_s3 = FALSE,
-                             selection = c( "rdb_table", "header" ) ) {
+                             selection = c( "rdb_table", "header" ),
+                             output = c( "csv", "parquet", "both" ), ... ) {
+
+  output <- match.arg( output )
 
   selection <- match.arg( selection )
   db <- dplyr::tbl( con, paste0( "EFILE", year, ".FLATXML" ) )
@@ -149,14 +160,10 @@ build_rdb_table <- function( table_name, year, TABLE.HEADERS, con, cc_file,
 
   wide_xx <- wide_xx %>% dplyr::relocate( c( key.names, "TABLE_ID", new.order ) )
 
-  if ( post_to_s3 ) {
-    write_csv_to_s3( db_tbl = wide_xx, table_name = table_name, year = year, con = con )
-  } else {
-    fpath <- paste0( "CSV/", table_name, "-", year, ".CSV" )
-    wide_xx %>% dplyr::compute( "TEMP", temporary = TRUE, overwrite = TRUE )
-    SQL <- paste0( "COPY TEMP TO '", fpath, "' WITH ( HEADER, DELIMITER ',' );" )
-    DBI::dbExecute( con, SQL )
-  }
+  dest <- if ( post_to_s3 ) s3_public_base() else "CSV/"
+  write_table_output( db_tbl = wide_xx, table_name = table_name, year = year,
+                      con = con, output = output, dest = dest, ... )
+
   return( invisible( wide_xx ) )
 }
 
@@ -185,14 +192,25 @@ build_rdb_table <- function( table_name, year, TABLE.HEADERS, con, cc_file,
 #' @param ccf Data frame. Concordance crosswalk used for variable alignment.
 #' @param table_headers Data frame. Output of `get_table_headers()`, providing
 #'   schema details for relational table construction.
+#' @param output One of `"csv"` (default, unchanged behaviour), `"parquet"`, or
+#'   `"both"`. Passed through to [build_table()] and [build_rdb_table()], which
+#'   write both formats from one materialised temp table.
+#' @param ... Further arguments passed to [write_table_output()].
 #'
-#' @return Invisibly returns `NULL`. Side effects: writes CSV tables for each year.
+#' @return Invisibly, a character vector of the files written into `wd/CSV`.
 #'
 #' @examples
 #' \dontrun{
 #' extract_csv_tables(
 #'   wd = "C:/Users/jdlec/DATA/DUCKDB_2025",
 #'   years = 2009:2024
+#' )
+#'
+#' # publish both formats in one pass over the databases
+#' extract_csv_tables(
+#'   wd     = "C:/Users/jdlec/DATA/DUCKDB_2025",
+#'   years  = 2009:2024,
+#'   output = "both"
 #' )
 #' }
 #'
@@ -201,7 +219,11 @@ extract_csv_tables <- function(wd,
                                years,
                                table_names = NULL,
                                ccf = NULL,
-                               table_headers = NULL) {
+                               table_headers = NULL,
+                               output = c( "csv", "parquet", "both" ),
+                               ...) {
+
+  output <- match.arg( output )
 
   # ---- Input validation ----
   dir.create(file.path(wd,"CSV"),showWarnings=FALSE)
@@ -239,11 +261,12 @@ extract_csv_tables <- function(wd,
 
     # Build header tables
     message("  Building header tables (T00)")
-    purrr::walk(t00, build_table, year, con, ccf)
+    purrr::walk(t00, build_table, year, con, ccf, output = output, ...)
 
     # Build relational data tables
     message("  Building data tables")
-    purrr::walk(t01, build_rdb_table, year, table_headers, con, ccf)
+    purrr::walk(t01, build_rdb_table, year, table_headers, con, ccf,
+                output = output, ...)
 
     DBI::dbDisconnect(con)
     gc()

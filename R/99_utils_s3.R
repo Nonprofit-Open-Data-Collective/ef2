@@ -66,7 +66,26 @@ configure_aws_credentials <- function(con) {
   DBI::dbExecute( con, "SET s3_region='us-east-1';" )
 }
 
+#' S3 prefix that built tables are published to
+#'
+#' @description
+#' Returns the `s3://` prefix used when `post_to_s3 = TRUE`. The default is the
+#' value [write_csv_to_s3()] has always hard-coded, so behaviour is unchanged;
+#' override it with `options( ef2.s3_public_base = "s3://nccs-efile/public/efile_v2_2/" )`
+#' to publish to a different release prefix without editing the package.
+#'
+#' @return Character S3 prefix, with a trailing slash.
+#' @export
+s3_public_base <- function() {
+  getOption( "ef2.s3_public_base", "s3://nccs-efile/public/v2025_03/" )
+}
+
+
 #' Write a DuckDB table to CSV on S3 via COPY
+#'
+#' @description
+#' Retained for backward compatibility. [write_table_output()] supersedes this
+#' and can emit Parquet alongside the CSV from a single materialised temp table.
 #'
 #' @param db_tbl A lazy tibble / table reference.
 #' @param table_name Character.
