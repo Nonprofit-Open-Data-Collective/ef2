@@ -9,7 +9,9 @@ extract_csv_tables(
   years,
   table_names = NULL,
   ccf = NULL,
-  table_headers = NULL
+  table_headers = NULL,
+  output = c("csv", "parquet", "both"),
+  ...
 )
 }
 \arguments{
@@ -25,9 +27,15 @@ DuckDB databases.}
 
 \item{table_headers}{Data frame. Output of \code{get_table_headers()}, providing
 schema details for relational table construction.}
+
+\item{output}{One of \code{"csv"} (default, unchanged behaviour), \code{"parquet"}, or
+\code{"both"}. Passed through to \code{\link[=build_table]{build_table()}} and \code{\link[=build_rdb_table]{build_rdb_table()}}, which
+write both formats from one materialised temp table.}
+
+\item{...}{Further arguments passed to \code{\link[=write_table_output]{write_table_output()}}.}
 }
 \value{
-Invisibly returns \code{NULL}. Side effects: writes CSV tables for each year.
+Invisibly, a character vector of the files written into \code{wd/CSV}.
 }
 \description{
 Iterates over a set of DuckDB database files, one per tax year, and extracts
@@ -46,6 +54,13 @@ and each of those subdirectories must include a DuckDB file such as
 extract_csv_tables(
   wd = "C:/Users/jdlec/DATA/DUCKDB_2025",
   years = 2009:2024
+)
+
+# publish both formats in one pass over the databases
+extract_csv_tables(
+  wd     = "C:/Users/jdlec/DATA/DUCKDB_2025",
+  years  = 2009:2024,
+  output = "both"
 )
 }
 

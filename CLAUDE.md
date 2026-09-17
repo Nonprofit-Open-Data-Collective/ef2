@@ -34,6 +34,7 @@ A person's name sitting in `BusinessName` is the second kind. Do not "fix" it.
 | `R/06_update_db.R` | incremental updates |
 | `R/08_extract_csv_tables.R` | long → wide; `pivot_wider()` on `OBJECTID` + `TABLE_ID` |
 | `R/09_xpath_reports.R` | xpath usage reports across years |
+| `R/11_write_table_output.R` | CSV and/or Parquet output; round-trip verification |
 | `R/99_utils.R` | `get_table_id()`, `get_header()`, xpath helpers |
 
 `get_table_id()` derives `TABLE_ID` from the **last** bracketed index in an
@@ -92,6 +93,42 @@ audit_table_headers()   # zero rows == no header can capture another table's xpa
 That check needs no data and no database. Run it after any change to
 `TABLE.HEADERS`, `get_header()`, or the selection step.
 
-Note `devtools::document()` currently fails here — the declared dependency
-`aws.signature` is not installed — so NAMESPACE may need a manual export until
-that is resolved.
+`devtools::document()` runs clean as of 2026-09-17 — `aws.signature` is now
+installed, so the manual-NAMESPACE workaround previously noted here is no longer
+needed. (`roxygen2::roxygenise(load_code = "source")` emits spurious
+unresolved-link warnings for same-package topics; use `devtools::document()`.)
+
+## Output formats
+
+`build_table()`, `build_rdb_table()` and `extract_csv_tables()` take
+`output = c("csv", "parquet", "both")`. `"csv"` is the default and is unchanged.
+
+```r
+extract_csv_tables( wd = "...", years = 2009:2024, output = "both" )
+```
+
+Both formats are written by `write_table_output()` from the **same** materialised
+`TEMP` table, so Parquet is never a re-parse of the CSV. That matters: FLATXML is
+all-VARCHAR (`R/04_write_to_duckdb.R` calls `lapply(df, as.character)`), so this
+path involves no type inference anywhere. Re-reading a published CSV does —
+`data.table::fread()` and `read.csv()` both cast `ORG_EIN` to integer and destroy
+leading zeros on ~4% of rows.
+
+**`normalize_empty = TRUE` is deliberate.** `TEMP` holds two different blanks:
+empty strings from `pivot_wider(values_fill = "")` and SQL NULLs from the KEYS
+`right_join()`. CSV writes them differently but no reader distinguishes them on
+the way back, while Parquet would preserve the distinction — so a literal
+conversion yields a Parquet file that disagrees with its own CSV sibling (~12.2M
+cells in the TY2023 header table). Folding `''` to NULL in the Parquet reproduces
+what every CSV reader already does. Verify any conversion with:
+
+```r
+verify_table_output( csv_path, parquet_path, con )   # ok == TRUE
+```
+
+That function hashes rows and sorts the hashes rather than ordering by a key —
+`OBJECTID` is **not** unique in repeating-group tables, so an `ORDER BY OBJECTID`
+digest reports false mismatches.
+
+To convert the CSVs already published on S3, see
+`dev/convert-s3-csv-to-parquet.R` (3,586 files, 194 GB, ~6x compression).

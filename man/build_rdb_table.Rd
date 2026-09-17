@@ -10,7 +10,10 @@ build_rdb_table(
   TABLE.HEADERS,
   con,
   cc_file,
-  post_to_s3 = FALSE
+  post_to_s3 = FALSE,
+  selection = c("rdb_table", "header"),
+  output = c("csv", "parquet", "both"),
+  ...
 )
 }
 \arguments{
@@ -18,13 +21,26 @@ build_rdb_table(
 
 \item{year}{Integer year.}
 
-\item{TABLE.HEADERS}{Named list of header xpaths per table.}
+\item{TABLE.HEADERS}{Named list of header xpaths per table. Used only when
+\code{selection = "header"}; the default path ignores it.}
 
 \item{con}{DBI connection.}
 
 \item{cc_file}{Concordance crosswalk.}
 
 \item{post_to_s3}{Logical export flag.}
+
+\item{selection}{Row-selection strategy. \code{"rdb_table"} (default) filters on
+the \code{RDB_TABLE} column assigned during flattening -- exact, and immune to
+the header-prefix collisions described in EF2-6. \code{"header"} reproduces the
+legacy unanchored regex, for diffing old against new output only.}
+
+\item{output}{One of \code{"csv"} (default, unchanged behaviour), \code{"parquet"}, or
+\code{"both"}. Both formats are written from one materialised temp table, so the
+Parquet file is never a re-parse of the CSV. See \code{\link[=write_table_output]{write_table_output()}}.}
+
+\item{...}{Further arguments passed to \code{\link[=write_table_output]{write_table_output()}}, e.g.
+\code{normalize_empty}, \code{sort_key}, \code{row_group_size}.}
 }
 \value{
 Invisibly the lazy tibble.

@@ -16,5 +16,6 @@ write_csv_to_s3(db_tbl, table_name, year, con)
 \item{con}{DBI connection.}
 }
 \description{
-Write a DuckDB table to CSV on S3 via COPY
+Retained for backward compatibility. \code{\link[=write_table_output]{write_table_output()}} supersedes this
+and can emit Parquet alongside the CSV from a single materialised temp table.
 }

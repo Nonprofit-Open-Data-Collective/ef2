@@ -4,7 +4,15 @@
 \alias{build_table}
 \title{Build a structured wide table and optionally export to CSV/S3}
 \usage{
-build_table(table_name, year, con, cc_file, post_to_s3 = FALSE)
+build_table(
+  table_name,
+  year,
+  con,
+  cc_file,
+  post_to_s3 = FALSE,
+  output = c("csv", "parquet", "both"),
+  ...
+)
 }
 \arguments{
 \item{table_name}{Character table id.}
@@ -15,7 +23,14 @@ build_table(table_name, year, con, cc_file, post_to_s3 = FALSE)
 
 \item{cc_file}{Concordance crosswalk.}
 
-\item{post_to_s3}{Logical, if TRUE write CSV to S3 using DuckDB COPY.}
+\item{post_to_s3}{Logical, if TRUE write to S3 using DuckDB COPY.}
+
+\item{output}{One of \code{"csv"} (default, unchanged behaviour), \code{"parquet"}, or
+\code{"both"}. Both formats are written from one materialised temp table, so the
+Parquet file is never a re-parse of the CSV. See \code{\link[=write_table_output]{write_table_output()}}.}
+
+\item{...}{Further arguments passed to \code{\link[=write_table_output]{write_table_output()}}, e.g.
+\code{normalize_empty}, \code{sort_key}, \code{row_group_size}.}
 }
 \value{
 Invisibly the lazy tibble.
