@@ -29,6 +29,7 @@ Invisibly returns a data frame with columns:
 \describe{
 \item{xpath}{Unique XPATH2 string}
 \item{count_occurrences}{Number of occurrences in \code{FLATXML}}
+\item{count_filings}{Number of distinct filings (\code{OBJECTID}) using the xpath}
 \item{schema_versions}{Comma-separated list of distinct schema versions}
 }
 }

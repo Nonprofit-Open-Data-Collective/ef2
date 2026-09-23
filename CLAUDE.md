@@ -72,7 +72,9 @@ in-process `INSTALL httpfs` fails, even though the extension URL serves fine ove
 
 Note `generate_xpath_report()` cannot reach these yet: it builds
 `base_path/<year>/EFILE<year>.duckdb` and gates on `file.exists()`, which rejects
-URLs. `xpath_reports/` is empty as a result.
+URLs. Run it against a local build instead: `xpath_reports/` holds the TY2009–2024
+reports from the September 2026 build (`C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026`,
+~100 s for all years). Namespace-prefixed paths in them are EF2-9, not real xpaths.
 
 ## Consumers
 
