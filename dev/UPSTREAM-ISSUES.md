@@ -930,6 +930,96 @@ to rule out by hand.
 
 ---
 
+## EF2-10 — `extract_csv_tables()` crashes intermittently on a full-year build
+
+Not a data defect, and not a defect in what the package produces — every table
+this crash interrupted was rebuilt and verified. Recorded here, like EF2-5,
+because it is a property of this package's own tooling that anyone rebuilding
+the panel will hit, and because the obvious explanation for it is **wrong**.
+
+**The R process dies mid-build with no R-level error.** No condition, no
+traceback, nothing `tryCatch()` can intercept — on the first occurrence the
+shell reported `Segmentation fault`, which places the fault in compiled code
+(the `duckdb` R client's native layer), not in any R in ef2.
+
+### Observed rate
+
+Building TY2009–2024 to CSV + Parquet on 2026-09-17 and 2026-09-21, the entry
+point was invoked 14 times and died twice:
+
+| attempt | outcome |
+|---|---|
+| TY2009, TY2010, TY2011 | completed |
+| **TY2012 (2026-09-17)** | **died after 61 of 66 `T00` tables** |
+| TY2012 (rerun 2026-09-21, deliberate reproduction) | completed, 2.19 min |
+| **TY2016 (2026-09-21)** | **died ~20 s in, during the `T00` phase** |
+| TY2017–TY2024 | completed, all eight |
+
+No pattern in year, database size, or position in the build. TY2012 died late
+and TY2016 died almost immediately; the largest databases (TY2020–TY2023,
+~25 GB each) all completed. TY2012 **succeeded on re-run with no change to code
+or data**, which is the single most important fact here: the failure is not
+reproducible.
+
+### Memory accumulation is ruled out
+
+The first occurrence looked like accumulated session state — 61 tables into one
+long-lived R process. **That explanation is wrong.** Re-running the identical
+TY2012 build while sampling the process every 2 s:
+
+| point in run | working set |
+|---|---|
+| peak, during `T00` (~44 tables) | **27.9 GB** |
+| **at 122 files — where the original run died** | **~11 GB** |
+| settled through the `T01` phase | ~9.5 GB |
+
+Memory rises, peaks, and then *falls*. It does not accumulate across the build,
+and at the exact point of the original failure the process was well past its
+peak with ~96 GB free on a 127.5 GB machine. Sample trace kept at
+`EFILE_BUILD_SEPT_2026/experiment_2012/samples.tsv`.
+
+**Do not re-derive this.** Accumulation, table-specific data, and OS-level
+memory exhaustion have all been checked and none of them explains it:
+
+- *A pathological table.* No. `SM-P01-T00-NONCASH-CONTRIBUTIONS`, the table
+  TY2012 died on, is 136,056 cells over 18,953 filings and 98 variables, with a
+  maximum of **1** cell per `(OBJECTID, VARIABLE_NAME)` — no duplicate-driven
+  pivot expansion. It and the four tables after it each build in **under 4
+  seconds** from a fresh process.
+- *Out of memory.* No. See above.
+- *Session length.* No. TY2016 died 20 seconds in.
+
+### What is still unknown
+
+The cause. Also, for the TY2016 occurrence, the **exit status and signal were
+not captured**, so it is not even established whether that one was a segfault,
+a different signal, or a silent non-zero exit. The driver now records both
+(see below), so a third occurrence is diagnosable.
+
+### Mitigation, not a fix
+
+`dev/run_efile_build.sh` tries `extract_csv_tables()` first — it is the
+documented entry point and worth exercising — and falls back to rebuilding **15
+tables at a time in short-lived processes**, resuming from whichever outputs
+already exist on disk. A crash then costs one batch instead of a year.
+
+Resume is keyed on files present, not on a counter, so it is correct after a
+hard kill. Both build routes call the same `build_table()` / `build_rdb_table()`
+with the same arguments — `extract_csv_tables()` is a `purrr::walk` over exactly
+those calls — so output does not depend on which route ran.
+
+This bounds the damage. It does not address the cause, and it should not be
+mistaken for having done so.
+
+### Consequence for the data: none
+
+TY2009–2024 rebuilt to CSV + Parquet, **1,792 pairs, all verified byte-equal by
+`verify_table_output()`, zero warnings across all 16 years**. Both crashes cost
+progress, not correctness. TY2012 and TY2016 — the two interrupted years — carry
+the same 112/112 verification as the other fourteen.
+
+---
+
 ## Explicitly NOT ef2 issues
 
 Filed here only to stop them being re-filed as extraction bugs.
