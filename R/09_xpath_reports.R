@@ -80,10 +80,10 @@ generate_xpath_report <- function(year,
       xpath,
       COUNT(*) AS count_occurrences,
       COUNT(DISTINCT OBJECTID) AS count_filings,
-      STRING_AGG(DISTINCT VERSION, ', ') AS schema_versions
+      STRING_AGG(DISTINCT VERSION, ', ' ORDER BY VERSION) AS schema_versions
   FROM JOINED
   GROUP BY xpath
-  ORDER BY count_occurrences DESC;
+  ORDER BY count_occurrences DESC, xpath;
   "
 
   # Execute and fetch results

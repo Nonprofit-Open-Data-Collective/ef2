@@ -251,7 +251,9 @@ currently empty -- can be populated for 2009-2024.
 > **FIXED 2026-08-22.** `build_rdb_table()` now selects on `RDB_TABLE` and takes
 > a `selection` argument (`"rdb_table"` default, `"header"` for diffing).
 > Validated against local TY2012/TY2013 archives; results below. The published
-> CSVs are **not** yet regenerated — that is Step 6 and is still open.
+> CSVs are **not** yet regenerated — that is Step 6 and is still open, and the
+> defect is confirmed present in the shipped files (*Measured in the published
+> CSVs*, below).
 >
 > | table | year | header | rdb_table |
 > |---|---|---|---|
@@ -272,6 +274,11 @@ currently empty -- can be populated for 2009-2024.
 > the legacy path reproduces the 1.44 inflation exactly and the fix returns
 > 1.001. 2013 is the Schedule A naming transition, so legacy and `*Grp` filings
 > coexist and SA-P01's header list carries both spellings.
+
+> **TY2010 rebuilt and diffed end to end on 2026-09-17** — 89 of 112 tables
+> content-identical, 23 changed, every changed table matching FLATXML ground
+> truth, and zero regressions once `ExpenseAccount` was resolved. See
+> *TY2010 end-to-end validation* below.
 
 **This is the mechanism behind EF2-1, and it is not confined to Schedule R.**
 
@@ -323,6 +330,206 @@ parseable version, 280 end at TY2012 or earlier and **5 still appear in TY2013
 or later** — e.g. `Form990ScheduleAPartIVGrp/ExplanationTxt`, which
 `Form990ScheduleAPartI` still matches, and `HospitalFacilitiesGrp/FacilityNum`.
 So this is not purely historical.
+
+### Measured in the published CSVs (2026-09-17)
+
+The fix landed in code on 2026-08-22, but the published CSVs were uploaded
+2026-08-11 and still carry the defect. Audited by range-reading the header row
+of all 1,792 files in `s3://nccs-efile/public/efile_v2_2/` — 112 tables ×
+TY2009–2024, nothing downloaded:
+
+```bash
+curl -s -r 0-60000 \
+  "https://nccs-efile.s3.us-east-1.amazonaws.com/public/efile_v2_2/<FILE>" | head -1
+```
+
+A column counts as foreign when its `<FORM>_<PART>` prefix differs from the
+part named in the filename. **13 tables are affected in at least one year:**
+
+| table | years | worst | absorbs |
+|---|---|---|---|
+| `SR-P01-T01-ID-DISREGARDED-ENTITIES` | 2009–12 | **60 cols** | SR_02, SR_03, SR_04 |
+| `SK-P01-T01-BOND-ISSUES` | 2009–12 | **52** | SK_02, SK_03, SK_04 |
+| `SH-P05-T01-HOSPITAL-FACILITY` | 2009–12 | **50** | SH_01, SH_06, SH_99 |
+| `SR-P02-T01-ID-RLTD-TAX-EXEMPED-ORGS` | 2009–12 | 22 | SR_03 |
+| `SK-P02-T01-BOND-PROCEEDS` | 2009–12 | 15 | SK_03 |
+| `SD-P10-T01-OTH-LIABILITIES` | 2009–12 | 3 | SD_13 |
+| `SJ-P02-T01-COMPENSATION-DTK` | 2009–12 | 3 | SJ_03 |
+| `SK-P05-T01-PROCEDURE-CORRECTIVE-ACT` | 2010–12 | 3 | SK_06 |
+| `SR-P06-T01-UNRLTD-ORGS-TAXABLE-PARTNERSHIP` | 2010–12 | 3 | SR_07 |
+| `F9-P08-T01-REVENUE-PROGRAMS` | 2009–12 | 2 | F9_01 |
+| `F9-P09-T01-EXPENSES-OTHER` | 2009–12 | 1 | F9_01 |
+| `SA-P01-T01-PUBLIC-CHARITY-STATUS` | **2013** | 2 | SA_06 |
+| `SH-P05-T00-FAP-COMMUNITY-BENEFIT-POLICY` | **2010–2024** | 1 | SH_01 |
+
+Tables affected per year: 9 (2009), 12 (2010–2012), 2 (2013), then **1 in every
+year 2014–2024**.
+
+**Two tables leak past TY2012.** The "TY2009–2012 only" framing holds for the
+Schedule R tables of EF2-1 — `SR-P01`, `SR-P02` and `SR-P06` all stop at 2012 —
+but it does not hold for EF2-6 as a whole:
+
+- `SA-P01-T01-PUBLIC-CHARITY-STATUS` carries `SA_06_FORM_LINE_REFERENCE` and
+  `SA_06_EXPLANATION_TEXT` in **TY2013**. This is the
+  `Form990ScheduleAPartIVGrp/ExplanationTxt` capture predicted above, now
+  confirmed in a shipped file rather than inferred from the concordance.
+- `SH-P05-T00-FAP-COMMUNITY-BENEFIT-POLICY` carries
+  `SH_01_CHNA_DESC_RESOURCES_X` in **every year from TY2010 through TY2024**.
+  This is the `T00`/`T01` co-location described in Step 4, and it reaches the
+  current build — not a legacy-only artifact. `SH-P05-T01` itself is clean from
+  TY2013 on.
+
+Step 1 (`RDB_TABLE ==`) fixes both. Step 2 (anchoring) fixes neither: `SA-P01`'s
+capture lands on a segment boundary already, and the `T00`/`T01` pair shares one
+node.
+
+### TY2010 end-to-end validation (2026-09-17)
+
+First full-year rebuild through the fixed path, diffed table by table against the
+published CSVs. Method: `download_s3_database(2010, version = "efile_v2_2")`,
+then `extract_csv_tables(wd, years = 2010)` — the real entry point, not a
+replica of its loop — then all 112 tables compared against
+`s3://nccs-efile/public/efile_v2_2/*-2010.CSV`.
+
+Both inputs were byte-verified against S3 before use. Build time was **1.2
+minutes** against a local copy of the database.
+
+**Result: 89 of 112 tables content-identical, 23 changed, and — after resolving
+`ExpenseAccount` (below) — 0 regressions.**
+
+"Content-identical" here means set equality in both directions (`EXCEPT` each
+way), not merely matching row counts.
+
+| table | rows | filings | cols |
+|---|---|---|---|
+| `SR-P01-T01-ID-DISREGARDED-ENTITIES` | 297,907 → 11,335 (−96.2%) | 37,996 → 3,916 | 93 → 34 |
+| `SH-P05-T01-HOSPITAL-FACILITY` | 36,824 → 4,422 (−88.0%) | 2,475 → 2,475 | 127 → 33 |
+| `SR-P06-T01-UNRLTD-ORGS-TAXABLE-PARTNERSHIP` | 2,116 → 197 (−90.7%) | 1,671 → 119 | 35 → 31 |
+| `SD-P10-T01-OTH-LIABILITIES` | 193,113 → 106,645 (−44.8%) | 74,791 → 53,434 | 23 → 19 |
+| `F9-P08-T01-REVENUE-PROGRAMS` | 283,207 → 196,243 (−30.7%) | 123,025 → 86,018 | 25 → 23 |
+| `F9-P09-T01-EXPENSES-OTHER` | 607,830 → 492,348 (−19.0%) | 123,025 → 116,010 | 24 → 22 |
+| `SR-P02-T01-ID-RLTD-TAX-EXEMPED-ORGS` | 276,253 → 231,011 (−16.4%) | 35,180 → 34,126 | 57 → 35 |
+| `SK-P01-T01-BOND-ISSUES` | 9,108 → 8,959 | 5,241 → 5,229 | 68 → 27 |
+| `F9-P07-T01-COMPENSATION` | 2,081,865 → **2,082,149** | unchanged | 38 → **42** |
+
+`F9-P07-T01-COMPENSATION` again **gains** the four `F9_07_COMP_DTK_EXPL_*`
+columns and 284 rows with them — the same missing-header fix seen at 501 rows in
+TY2012.
+
+### Ground-truth check — every changed table, not just Schedule R
+
+For each of the 23 changed tables, the rebuilt filing count was compared against
+the filings that genuinely own data for that table in `FLATXML`
+(`count(DISTINCT OBJECTID) WHERE TYPE='terminal' AND RDB_TABLE = <table>`):
+
+- **23 of 23 match exactly.**
+- **0 tables invented a filing** absent from the published file.
+
+`SR-P01` is the clearest case. FLATXML holds exactly **3,916** filings with
+genuine Part I data and the rebuild has exactly 3,916. The published file's
+extra 34,080 filings are fully accounted for by the unanchored match: Part II
+contributes 34,126 filings, Part III 6,269, Part IV 11,039. The dropped filings
+never had Part I data at all.
+
+### The 56 apparently-own-part columns are re-routed, not lost
+
+A prefix check flags 56 dropped columns whose `<FORM>_<PART>` prefix matches
+their own table — alarming until resolved, because a prefix cannot distinguish
+`T00` from `T01` within one part. Every one lands in its correct destination:
+
+| from | columns | to (per concordance) | present in rebuild |
+|---|---|---|---|
+| `SH-P05-T01-HOSPITAL-FACILITY` | 36 | `SH-P05-T00-FAP-COMMUNITY-BENEFIT-POLICY` | 36 of 36 |
+| `SH-P05-T01-HOSPITAL-FACILITY` | 8 | `SH-P05-T02-NON-HOSPITAL-FACILITY` | 8 of 8 |
+| `SG-P02-T01-FUNDRAISING-EVENTS` | 11 | `SG-P02-T00-FUNDRAISING-EVENTS` | 11 of 11 |
+| `SA-P01-T01-PUBLIC-CHARITY-STATUS` | 1 | `SA-P01-T00-PUBLIC-CHARITY-STATUS` | 1 of 1 |
+
+**Columns genuinely lost: 0.** This is Step 4 resolving exactly as predicted.
+
+### `SK-P05-T01` rebuilds to zero rows, and that is correct
+
+Step 3's duplicate header entry, now confirmed against data. All **4,953**
+TY2010 terminal cells matching `Form990ScheduleKPartV` carry
+`RDB_TABLE = SK-P06-T99-SUPPLEMENTAL-INFO`; **none** map to `SK-P05-T01`. The
+published table's 2,096 rows were therefore 100% `SK-P06`'s rows, and the
+concordance's 5 `SK-P05-T01` xpaths match nothing in TY2010 filings.
+
+The empty-but-headed CSV is faithful. Decide before republishing whether
+consumers should receive a zero-row file or none at all.
+
+### `ExpenseAccount` — found, diagnosed, and resolved (2026-09-17)
+
+The first TY2010 rebuild dropped 14 non-concordance stray columns. **13 are
+entirely empty** (3,363 cells, zero populated) and dropping them is pure
+cleanup. The fourteenth was not: `ExpenseAccount`, **114 cells, all 114
+populated, across 59 filings**, in `F9-P07-T01-COMPENSATION-HCE-EZ`.
+
+**The cause was not what EF2-7 assumed.** The xpath is *already* in the live
+concordance:
+
+```
+/Return/ReturnData/IRS990EZ/CompensationOfHighestPaidEmpl/ExpenseAccount
+  -> F9_07_COMP_DTK_EXP_ACCT_HCE  ->  F9-P07-T01-COMPENSATION-HCE-EZ
+```
+
+So this was never a concordance coverage gap. It is **staleness in two places**,
+and the distinction matters for every future republish:
+
+1. `get_concordance()` defaults to `gh = TRUE`, fetching GitHub master live.
+   The **packaged** copy shipped in `data/concordance.rda` had 6,863 rows against
+   master's 6,864 — and that single missing row was exactly this xpath. Anyone
+   running `gh = FALSE` got the older mapping.
+2. More importantly, **`RDB_TABLE` is a materialized column in `FLATXML`**,
+   assigned at flatten time. The published TY2010 archive was built before the
+   concordance gained this entry, so its stored `RDB_TABLE` is empty for these
+   cells and `VARIABLE_NAME` fell back to the raw element name. **Updating the
+   concordance alone does not reach an already-built database.**
+
+Point 2 is the one that bites: any table whose `rdb_table` assignment changed
+upstream after a database was built will silently disagree with the concordance
+until that year is re-flattened. Selection on `RDB_TABLE` is still correct —
+it is the stored value that is stale, not the strategy.
+
+**Measured split of the TY2010 orphan population** (terminal cells with no
+`RDB_TABLE`), joined against live master:
+
+| status | cells | populated | distinct xpaths |
+|---|---|---|---|
+| genuinely absent from the concordance | 100,959 | 24,216 | 121 |
+| **in the concordance — stored value is stale** | **114** | **114** | 1 |
+
+So EF2-7's larger finding stands: ~24k populated values in ~121 xpaths really
+are unmapped and reach no published table. Only `ExpenseAccount` was a
+staleness artifact — but it was the only one of the two populations that the old
+header regex swept into a published file, which is why it was the only
+regression.
+
+**Resolution, applied and verified:**
+
+- Added the xpath to `inst/extdata/concordance.csv` (one row) and regenerated
+  `data/concordance.rda`, bringing the packaged copy to master's 6,864 rows.
+  The two now differ in nothing.
+- Backfilled `RDB_TABLE` / `VARIABLE_NAME` on those 114 cells in the local
+  TY2010 database — what re-flattening would produce for them — and rebuilt.
+
+Result, against the published CSV:
+
+| | published | rebuilt |
+|---|---|---|
+| column | `ExpenseAccount` | `F9_07_COMP_DTK_EXP_ACCT_HCE` |
+| populated values | 114 | **114** |
+| rows / columns | 45,106 / 29 | 45,106 / 29 |
+
+`(OBJECTID, value)` set difference is **0 in both directions** — every value
+survives on the same filing, under its proper concordance name. The rename still
+shows as a dropped column in a naive header diff; it is a rename, not a loss.
+
+**With this applied, no TY2010 table is worse than what is published.** 89
+content-identical, 23 improved, 0 regressions.
+
+**For the republish:** re-flatten each year rather than re-extracting from the
+existing archives, or apply the same backfill. Re-extraction alone inherits
+whatever `RDB_TABLE` the archive was built with.
 
 ### The opposite failure
 
@@ -482,10 +689,24 @@ never there changes nothing.
 
 ### Step 6 — republish
 
-Affected years are **TY2009-2012**, plus the 5 mis-captured xpaths that reach
-TY2013+. Regenerate and diff against the published CSVs before replacing them --
+Affected years are **TY2009-2012 for most tables, but not all** — see *Measured
+in the published CSVs* above. The republish list is 13 tables, of which two
+extend past the legacy window:
+
+- `SA-P01-T01-PUBLIC-CHARITY-STATUS` — TY2013
+- `SH-P05-T00-FAP-COMMUNITY-BENEFIT-POLICY` — TY2010 through **TY2024**
+
+Every other affected table is confined to TY2009-2012. Do not scope the
+republish to the legacy years alone; `SH-P05-T00` needs all 15 of its years
+regenerated, TY2024 included.
+
+Regenerate and diff against the published CSVs before replacing them --
 `SR-P04-2012` was diffed this way and turned out to be faithful, so do not
 assume a table is corrupt merely because it appears in the audit.
+
+A cheap post-republish check, no download required: range-read the header row of
+each regenerated file and confirm no column's `<FORM>_<PART>` prefix differs
+from the table's own part.
 
 ---
 
@@ -540,6 +761,38 @@ TY2012. Add its xpath to the concordance so it gets a proper variable name and
 unmapped variable is the wrong repair when the variable holds data; mapping it
 is the right one.
 
+> **RESOLVED 2026-09-17, and the diagnosis above was wrong on one point.**
+> `ExpenseAccount` was **not** missing from the concordance. GitHub master
+> already maps
+> `/Return/ReturnData/IRS990EZ/CompensationOfHighestPaidEmpl/ExpenseAccount`
+> to `F9_07_COMP_DTK_EXP_ACCT_HCE` / `F9-P07-T01-COMPENSATION-HCE-EZ`. What was
+> stale was (a) the **packaged** copy in `data/concordance.rda`, 6,863 rows
+> against master's 6,864 — that one row — and (b) the **materialized
+> `RDB_TABLE` column** in the published archives, written at flatten time before
+> the entry existed. Both are now fixed for TY2010 and verified: all 114 TY2010
+> values survive under the proper variable name, `(OBJECTID, value)` set
+> difference 0 in both directions. See EF2-6, *`ExpenseAccount` — found,
+> diagnosed, and resolved*.
+>
+> **This does not weaken the rest of EF2-7.** Joining the TY2010 orphan cells
+> against live master splits them cleanly:
+>
+> | status | cells | populated | xpaths |
+> |---|---|---|---|
+> | genuinely absent from the concordance | 100,959 | 24,216 | 121 |
+> | in the concordance, stored value stale | 114 | 114 | 1 |
+>
+> The ~24k populated values in 121 unmapped xpaths are real and still reach no
+> published table. Only `ExpenseAccount` was staleness — and only it regressed,
+> because it was the only one of the two populations the old header regex swept
+> into a published file.
+>
+> **The general lesson is the one to carry forward:** `RDB_TABLE` is written
+> into `FLATXML` at flatten time, so a concordance change never reaches an
+> existing archive. Re-extracting from a published database inherits whatever
+> mapping that database was built with. Republishing must re-flatten, or
+> backfill `RDB_TABLE` for xpaths whose assignment changed since the build.
+
 ---
 
 ## EF2-8 — two dyadic rosters with EINs reach no published table
@@ -580,7 +833,200 @@ new detectors in `superstructure`.
 
 ---
 
-## EF2-9 — filings with a prefixed `irs:` namespace lose their keys
+## EF2-9 — `SA-P00-T00-HEADER` publishes a header-only file in all 16 years
+
+`SA-P00-T00-HEADER` has **zero rows in every year, TY2009–2024**, and unlike
+every other empty table in the extract, no schema window explains it. The table
+has exactly one xpath:
+
+```
+/Return/ReturnData/IRS990ScheduleA/RelationshipSchedule/NameOfOrganization/BusinessNameLine1
+```
+
+Its `versions` field is **empty** and `latest_version = NA`.
+`RelationshipSchedule` appears nowhere else in the concordance — no versioned
+sibling, no alternate spelling, no `*Grp` successor. A one-xpath table whose
+only xpath matches no schema version can never populate, and 16 years of zero
+row counts are the empirical confirmation.
+
+### Confirmed in the published CSVs (2026-09-17)
+
+All 16 published files are **207-byte header-only files**, byte-identical across
+years:
+
+```bash
+curl -sI "https://nccs-efile.s3.us-east-1.amazonaws.com/public/efile_v2_2/SA-P00-T00-HEADER-2019.CSV"
+# Content-Length: 207
+```
+
+| year | Content-Length | data rows |
+|---|---|---|
+| 2009, 2013, 2019, 2024 (spot-checked) | 207 | 0 |
+| (for scale) `SA-P01-T00-…-2019.CSV` | 113,893,092 | — |
+
+The header line is the 16 `KEYS` columns and nothing else — the variable the
+table exists to carry, `SA_00_NAME_ORG_L1`, is not even a column, because
+`build_table()`'s `new.order` resolves to nothing when no row matches.
+
+### Not the same thing as the `-P99-` tables
+
+Several other tables are empty for long stretches, and those are **correct** —
+leave them alone. From the NCCS row-count extract
+(`COUNT-OF-ROWS-BY-TABLE-AND-FORMTYPE-EFILE_V2_1.csv`, 112 tables × 16 years =
+1,792 cells): 94 zero cells across 12 tables, of which **93 are explained by
+schema-version coverage**:
+
+| table | schema span | zero years |
+|---|---|---|
+| `SA-P04-T00-SUPPORT-ORGS` | 2014–2016 | 2009–2013 |
+| `SA-P05-T00-SUPPORT-ORGS` | 2014–2023 | 2009–2013 |
+| `SD-P99-T00-RECONCILIATION-NETASSETS` | 2009–2011 | 2012–2024 |
+| `SF-P99-T00-FRGN-ORG-GRANTS` | 2009–2011 | 2012–2024 |
+| `SI-P99-T00-GRANTS-US-ORGS-GOVTS` | 2009–2011 | 2012–2024 |
+| `SN-P99-T00-LIQUIDATION-TERMINATION-DISSOLUTION` | 2009 only | 2010–2024 |
+| `SH-P99-T00-FAP-COMMUNITY-BENEFIT-POLICY` | 2010–2015 | 2009, 2016–2024 |
+| `SF-P04-T00-FRGN-INTERESTS` | 2010–2016 | 2009 |
+| `SH-P05-T00-FAP-COMMUNITY-BENEFIT-POLICY` | 2010–2023 | 2009 |
+| `SH-P05-T02-NON-HOSPITAL-FACILITY` | 2010–2016 | 2009 |
+| `SK-P05-T01-PROCEDURE-CORRECTIVE-ACT` | 2011–2016 | 2009 |
+| **`SA-P00-T00-HEADER`** | **none** | **all 16** |
+
+The `-P99-` tables are not form parts at all; they are holding pens for the
+**pre-2012 flat xpath spellings** (`/IRS990ScheduleD/TotalRevenue`, no part
+node). That content moved to `Form990ScheduleDPartXI/...` and now lands in
+`SD-P11`/`SD-P12`, so the legacy table went permanently empty when the form
+changed. That is the extract being faithful, not a defect.
+
+Note the `versions` labels are **schema years, not tax years**, so the ±1 offset
+at `SK-P05` — span starts 2011v*, TY2010 is nonzero — is expected and not
+evidence of anything.
+
+### One check before acting
+
+Everything above is concordance metadata plus published row counts. Neither
+proves the element is absent from the filings themselves, only that nothing ever
+reached the table. Confirm against `FLATXML` in any one year:
+
+```sql
+SELECT COUNT(*) FROM FLATXML WHERE XPATH LIKE '%RelationshipSchedule%';
+```
+
+Zero there means the xpath is a concordance entry for a node that never
+shipped. Nonzero would mean the opposite and a much more interesting defect —
+data present in the XML and dropped on the floor.
+
+**Answered 2026-09-23: zero in every year.** The xpath reports in
+`xpath_reports/` cover all of `FLATXML` for TY2009–2024. `RelationshipSchedule`
+appears only in `ALL-XPATHS.csv`'s concordance columns and has no occurrence
+count in any year, so the concordance lists a node that no filing ever used.
+Proceed with the concordance fix.
+
+**Action if confirmed:** fix it in the concordance, not in the build. Either
+remove the row — which retires the table, 112 → 111 — or, if a real Schedule A
+node was intended, correct the xpath to that node. Do **not** special-case the
+table out of the build loop while leaving the concordance row in place:
+`get_table_names()` derives the build list from `rdb_table`, so the row *is* the
+table, and a filtered build list would be a second place to keep in sync.
+
+**Blast radius:** nothing downstream breaks — any consumer reading this table
+has always read an empty file, so there is no analysis to revisit. The cost is
+16 published files that advertise a Schedule A header table and deliver none,
+and one phantom entry in the table inventory that anyone auditing coverage has
+to rule out by hand.
+
+---
+
+## EF2-10 — `extract_csv_tables()` crashes intermittently on a full-year build
+
+Not a data defect, and not a defect in what the package produces — every table
+this crash interrupted was rebuilt and verified. Recorded here, like EF2-5,
+because it is a property of this package's own tooling that anyone rebuilding
+the panel will hit, and because the obvious explanation for it is **wrong**.
+
+**The R process dies mid-build with no R-level error.** No condition, no
+traceback, nothing `tryCatch()` can intercept — on the first occurrence the
+shell reported `Segmentation fault`, which places the fault in compiled code
+(the `duckdb` R client's native layer), not in any R in ef2.
+
+### Observed rate
+
+Building TY2009–2024 to CSV + Parquet on 2026-09-17 and 2026-09-21, the entry
+point was invoked 14 times and died twice:
+
+| attempt | outcome |
+|---|---|
+| TY2009, TY2010, TY2011 | completed |
+| **TY2012 (2026-09-17)** | **died after 61 of 66 `T00` tables** |
+| TY2012 (rerun 2026-09-21, deliberate reproduction) | completed, 2.19 min |
+| **TY2016 (2026-09-21)** | **died ~20 s in, during the `T00` phase** |
+| TY2017–TY2024 | completed, all eight |
+
+No pattern in year, database size, or position in the build. TY2012 died late
+and TY2016 died almost immediately; the largest databases (TY2020–TY2023,
+~25 GB each) all completed. TY2012 **succeeded on re-run with no change to code
+or data**, which is the single most important fact here: the failure is not
+reproducible.
+
+### Memory accumulation is ruled out
+
+The first occurrence looked like accumulated session state — 61 tables into one
+long-lived R process. **That explanation is wrong.** Re-running the identical
+TY2012 build while sampling the process every 2 s:
+
+| point in run | working set |
+|---|---|
+| peak, during `T00` (~44 tables) | **27.9 GB** |
+| **at 122 files — where the original run died** | **~11 GB** |
+| settled through the `T01` phase | ~9.5 GB |
+
+Memory rises, peaks, and then *falls*. It does not accumulate across the build,
+and at the exact point of the original failure the process was well past its
+peak with ~96 GB free on a 127.5 GB machine. Sample trace kept at
+`EFILE_BUILD_SEPT_2026/experiment_2012/samples.tsv`.
+
+**Do not re-derive this.** Accumulation, table-specific data, and OS-level
+memory exhaustion have all been checked and none of them explains it:
+
+- *A pathological table.* No. `SM-P01-T00-NONCASH-CONTRIBUTIONS`, the table
+  TY2012 died on, is 136,056 cells over 18,953 filings and 98 variables, with a
+  maximum of **1** cell per `(OBJECTID, VARIABLE_NAME)` — no duplicate-driven
+  pivot expansion. It and the four tables after it each build in **under 4
+  seconds** from a fresh process.
+- *Out of memory.* No. See above.
+- *Session length.* No. TY2016 died 20 seconds in.
+
+### What is still unknown
+
+The cause. Also, for the TY2016 occurrence, the **exit status and signal were
+not captured**, so it is not even established whether that one was a segfault,
+a different signal, or a silent non-zero exit. The driver now records both
+(see below), so a third occurrence is diagnosable.
+
+### Mitigation, not a fix
+
+`dev/run_efile_build.sh` tries `extract_csv_tables()` first — it is the
+documented entry point and worth exercising — and falls back to rebuilding **15
+tables at a time in short-lived processes**, resuming from whichever outputs
+already exist on disk. A crash then costs one batch instead of a year.
+
+Resume is keyed on files present, not on a counter, so it is correct after a
+hard kill. Both build routes call the same `build_table()` / `build_rdb_table()`
+with the same arguments — `extract_csv_tables()` is a `purrr::walk` over exactly
+those calls — so output does not depend on which route ran.
+
+This bounds the damage. It does not address the cause, and it should not be
+mistaken for having done so.
+
+### Consequence for the data: none
+
+TY2009–2024 rebuilt to CSV + Parquet, **1,792 pairs, all verified byte-equal by
+`verify_table_output()`, zero warnings across all 16 years**. Both crashes cost
+progress, not correctness. TY2012 and TY2016 — the two interrupted years — carry
+the same 112/112 verification as the other fourteen.
+
+---
+
+## EF2-11 — filings with a prefixed `irs:` namespace lose their keys
 
 Found 2026-09-23 while running `process_xpaths()` over the September 2026 build
 (`EFILE_BUILD_SEPT_2026`, TY2009–2024).
