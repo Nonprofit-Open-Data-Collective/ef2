@@ -21,12 +21,14 @@ one-row data frame:
 \item{ORG_EIN}{Raw Employer Identification Number digits from the return header.}
 \item{ORG_NAME_L1}{Filing organization name, line 1.}
 \item{ORG_NAME_L2}{Filing organization name, line 2 (if present).}
-\item{RETURN_AMENDED_X}{Logical; \code{TRUE} if the filing is an amended return.}
-\item{RETURN_GROUP_X}{Logical; \code{TRUE} if the filing is a group return for affiliates.}
+\item{RETURN_AMENDED_X}{Logical; \code{TRUE} if the filing is an amended return
+(read from the 990, 990-EZ or 990-PF amended-return element).}
+\item{RETURN_GROUP_X}{Logical; \code{TRUE} if the filing is a group return for
+affiliates. Always \code{FALSE} for the 990-EZ and 990-PF, which have no group returns.}
 \item{RETURN_PARTIAL_X}{Logical; \code{TRUE} if the tax period spans fewer than 360 days (partial-year return).}
 \item{RETURN_TAXPER_DAYS}{Number of days in the tax period (end minus begin, plus 1).}
 \item{RETURN_TIME_STAMP}{Timestamp when the return was created/submitted.}
-\item{RETURN_TYPE}{Return type (e.g. \code{"990"}, \code{"990EZ"}).}
+\item{RETURN_TYPE}{Return type (e.g. \code{"990"}, \code{"990EZ"}, \code{"990PF"}).}
 \item{TAX_PERIOD_BEGIN_DATE}{Tax period begin date.}
 \item{TAX_PERIOD_END_DATE}{Tax period end date.}
 \item{TAX_YEAR}{Tax year covered by the filing.}

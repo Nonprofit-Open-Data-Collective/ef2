@@ -1075,6 +1075,165 @@ is needed.
 
 ---
 
+## EF2-12 — real filing data sits in XML attributes and reaches no published table
+
+The IRS stores some filed values as **XML attributes** rather than element text.
+`get_attr_df()` captures all of them into `ATTRIBUTES` (`//*[@*]`, one row per
+attribute), so nothing is lost at parse time — but `ATTRIBUTES` feeds no table,
+and none of these values appear in any published CSV or Parquet file.
+
+Same class as EF2-7 and EF2-8: real filed data that no published table exposes.
+
+### What is in `ATTRIBUTES`
+
+| year | rows | filings | attrs/filing | distinct names |
+|---|---|---|---|---|
+| 2012 | 6.67 M | 273,438 | 24.4 | 16 |
+| 2018 | 9.89 M | 420,826 | 23.5 | 16 |
+| 2024 | 10.22 M | 456,170 | 22.4 | 20 |
+
+About **93% of rows are XML plumbing** with no analytic content:
+`referenceDocumentId` (3.87 M rows in TY2024), `documentId` (2.07 M),
+`referenceDocumentName`, `documentName`, the `xmlns:*` family, `schemaLocation`,
+`documentCnt`. `binaryAttachmentCnt` is **0 on all 456,170 TY2024 filings** — a
+dead field. Leave all of it alone.
+
+`returnVersion` is **already captured**: `get_keys()` reads it as `VERSION`, and
+joining `KEYS.VERSION` against the attribute in TY2024 matches 1:1 across all
+five schema versions. Nothing to do there either.
+
+### The part that is real data
+
+Panel-wide filing-year counts, TY2009–2024:
+
+| attribute (legacy / current) | node | filing-years | what it is |
+|---|---|---|---|
+| `typeOf501cOrganization` / `organization501cTypeTxt` | `Organization501cInd` | **1,457,404** | 501(c) subsection number |
+| `softwareId`, `softwareVersionNum` | various | 2,180,222 | e-file software vendor + version |
+| `contributionsReportedOnLine1a` / `fndrsngEventContriPrevRptAmt` | `FundraisingGrossIncomeAmt` | 291,097 | **dollar amount** |
+| `note` / `methodOfAccountingOtherDesc` | `MethodOfAccountingOtherInd` | 74,324 | "Other" accounting method text |
+| `accountingPeriodChangeCd`, `...ApprvCd` | `IRS990`, `IRS990EZ` | 21,709 | period change + approval basis (TY2020+) |
+| `amountOfInterest` / `interestAmt` | `NECTFilingForm990Ind` | 297 | negligible |
+
+**None of the ten appears in the concordance.** The only substring hits for
+`note` are unrelated footnote checkboxes (`F9_04_REP_FOOTNOTE_FIN48_X` and
+siblings), not this attribute.
+
+### The 501(c) subsection is the significant one
+
+The published header table records **that** an organization is a 501(c) other
+than (3), and never **which**:
+
+| | TY2012 | TY2024 |
+|---|---|---|
+| `F9_00_EXEMPT_STAT_501C_X` ticked | 68,570 | 104,296 |
+| subsection present in `ATTRIBUTES` | **68,570** | **104,296** |
+| published column holding the number | **none** | **none** |
+
+An exact 1:1 both years. The TY2024 distribution runs across 25 subsections and
+is exactly what it should be — (c)(6) trade associations 27,792, (c)(4) social
+welfare 20,564, (c)(7) social clubs 14,846, (c)(5) labor 14,822, out to (c)(29).
+A consumer today cannot separate a trade association from a labour union from a
+social club, although the filing says so.
+
+`fndrsngEventContriPrevRptAmt` is genuinely money, not a flag: TY2024 has 36,276
+filings carrying it, 7,643 non-zero, median non-zero **$14,590**, max $9.53 M,
+**$199.9 M** in total.
+
+`methodOfAccountingOtherDesc` is a partial loss rather than a total one. The
+published `F9_12_FINSTAT_METHOD_ACC_OTH` is populated for 837 filings in TY2012
+and 1,296 in TY2024, against 3,328 and 5,782 in `ATTRIBUTES` — the attribute is
+the fuller source by roughly 4x.
+
+### `get_keys()` does not capture the subsection — but the mechanism is already there
+
+Checked against both the source and the built databases: `get_keys()` returns 16
+variables (`EIN2`, `OBJECTID`, `ORG_EIN`, `ORG_NAME_L1`, `ORG_NAME_L2`,
+`RETURN_AMENDED_X`, `RETURN_GROUP_X`, `RETURN_PARTIAL_X`, `RETURN_TAXPER_DAYS`,
+`RETURN_TIME_STAMP`, `RETURN_TYPE`, `TAX_PERIOD_BEGIN_DATE`,
+`TAX_PERIOD_END_DATE`, `TAX_YEAR`, `URL`, `VERSION`) and none is the 501(c)
+subsection. The `KEYS` table in every published archive carries exactly those 16
+columns.
+
+**But `VERSION` is itself an attribute** — `xml_attr(doc, 'returnVersion')` — so
+there is already precedent for an attribute becoming a first-class variable.
+
+And `retrieve_xml()` needs **no modification** to read one. It is
+`xml_text(xml_find_all(doc, path))`, and an attribute xpath resolves through it
+unchanged. Verified against a live TY2024 filing
+(`202512129349300511_public.xml`, expected `9`):
+
+```r
+P <- paste( "//Organization501c/@typeOf501cOrganization",
+            "//Organization501cInd/@organization501cTypeTxt", sep = "|" )
+retrieve_xml( doc, P )      # "9"
+```
+
+The both-spellings pipe is the same idiom `get_keys()` already uses everywhere,
+and it handles the rename described below in one expression.
+
+**One trap, and it is EF2-11's trap.** This only works on a namespace-stripped
+document. IRS filings carry a default namespace
+(`d1 <-> http://www.irs.gov/efile`), and every unprefixed xpath returns nothing
+until `xml2::xml_ns_strip()` runs — including the existing `KEYS` xpaths. The
+pipeline already strips at `R/03_flatten_xml.R:139`, so anything added inside
+`get_keys()` is fine. Ad-hoc scripts that call `read_xml()` and query directly
+get `NA` for *everything*, silently; that is a namespace error, not a missing
+value. (Confirmed the hard way while testing this: a live filing returned `NA`
+for the attribute **and** for `//Return/ReturnHeader/TaxYr`, until the strip.)
+
+**EF2-11 is the same failure class**, one step further out: on the ~41 filings
+that use a *prefixed* `irs:` namespace, `xml_ns_strip()` leaves the prefix in
+place and `get_keys()` returns NA for `ORG_EIN` and `TAX_YEAR`. Any attribute
+added to `get_keys()` will be blank on exactly those filings too, for exactly
+that reason. Fixing EF2-11 fixes it here as well; do not treat the two
+separately.
+
+### All of these renamed at the TY2012/TY2013 boundary
+
+| legacy, TY2009–2012 | current, TY2013–2024 |
+|---|---|
+| `typeOf501cOrganization` | `organization501cTypeTxt` |
+| `contributionsReportedOnLine1a` | `fndrsngEventContriPrevRptAmt` |
+| `note` | `methodOfAccountingOtherDesc` |
+
+Clean switchover, no overlap year. The same boundary drives EF2-6. Any mapping
+that carries only one spelling breaks the panel at 2013 exactly as Schedule A
+did.
+
+### Recommended, in order
+
+1. **501(c) subsection.** Largest coverage, unambiguous semantics, and it turns
+   an existing binary flag into a 25-level classification. `KEYS` is the natural
+   home — it is filing-level, one value per return, and sits beside `VERSION`,
+   which arrived the same way.
+2. **`fndrsngEventContriPrevRptAmt`** — a dollar figure on a 990-EZ line.
+3. **`softwareId` / `softwareVersionNum`** — not filing data, but it supports
+   work on filing quality and vendor effects, and belongs with `VERSION`.
+4. **`methodOfAccountingOtherDesc`** — worth adding; values normalise easily
+   (the top six are spelling variants of "modified cash").
+5. **`accountingPeriodChangeCd` / `...ApprvCd`** — low volume, cheap, unambiguous.
+
+**Do not** add `interestAmt` (297 filing-years panel-wide) or anything in the
+plumbing bucket. `returnVersion` is already `VERSION`; do not duplicate it.
+
+### Open design question
+
+Adding these to `KEYS` via `get_keys()` is mechanical and needs no new
+machinery. Routing them through the **concordance** instead is not: the
+concordance maps xpaths to elements, `ATTRIBUTES` records the xpath of the
+*node* rather than of the attribute
+(`/Return/ReturnData/IRS990/Organization501cInd`, with `attr_name` held
+separately), and `RDB_TABLE` is assigned during flattening. Deciding whether
+attributes should become synthetic terminal rows in `FLATXML` — and so reachable
+by the ordinary table machinery — is a modelling choice, not a patch, and should
+be made deliberately rather than inferred from whichever route is easiest.
+
+Supporting detail: `EFILE_BUILD_SEPT_2026/attr_analysis/attr_names_by_year.csv`
+and `attr_panel_coverage.csv`.
+
+---
+
 ## Explicitly NOT ef2 issues
 
 Filed here only to stop them being re-filed as extraction bugs.
