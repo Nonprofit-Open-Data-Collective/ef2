@@ -56,6 +56,24 @@ retrieve_xml <- function( doc, TEMP_VAR ) {
   return(x)
 }
 
+#' Is a checkbox-style indicator element present and affirmative?
+#'
+#' IRS indicator elements carry `"X"` when ticked. Measured across TY2009,
+#' TY2012 and TY2024, no exempt-status indicator ever carries `"0"` or
+#' `"false"`, so presence alone would do -- but explicit negatives are excluded
+#' anyway, so that a future schema which starts writing them cannot silently
+#' turn a status on.
+#'
+#' @param x Character vector as returned by [retrieve_xml()].
+#' @return `TRUE` if any element is present and is not an explicit negative.
+#' @keywords internal
+ticked <- function( x ){
+  x <- x[ ! is.na( x ) ]
+  x <- trimws( as.character( x ) )
+  x <- x[ nzchar( x ) ]
+  any( ! tolower( x ) %in% c( "0", "false", "n", "no" ) )
+}
+
 
 #' Standardize boolean inputs
 #'
@@ -111,11 +129,16 @@ namedList <- function(...){
 #' \describe{
 #'   \item{EIN2}{Employer Identification Number formatted as `EIN-XX-XXXXXXX` (see [format_ein()]).}
 #'   \item{OBJECTID}{Unique filing identifier prefixed with `OID-`, derived from `url` (see [get_object_id()]).}
-#'   \item{ORG_501C_SUBSECTION}{501(c) subsection number (`"2"`–`"29"`), or `NA`
-#'     for 501(c)(3) organizations, 990-PF filers and anyone who left it blank.
-#'     The IRS stores this as an XML *attribute*, so it reaches no published
-#'     table other than through this key; see `dev/UPSTREAM-ISSUES.md` EF2-12.}
 #'   \item{ORG_EIN}{Raw Employer Identification Number digits from the return header.}
+#'   \item{ORG_EXEMPT_TYPE}{Tax-exempt status as a single string: `"501c2"` …
+#'     `"501c29"`, `"4947a1"`, `"527"`, or `NA`. Deliberately a string rather
+#'     than an integer, since 4947 and 527 are IRC sections and not 501(c)
+#'     subsections. Values match the `TaxStatus` naming in Giving Tuesday's
+#'     index. The 501(c) subsection is stored by the IRS as an XML *attribute*
+#'     and reaches no published table except through this key; TY2009 has no
+#'     501(c)(3) checkbox and encodes `"3"` in that attribute instead, which
+#'     this variable harmonises. `"527"` is carried for completeness but has
+#'     never been observed. See `dev/UPSTREAM-ISSUES.md` EF2-12.}
 #'   \item{ORG_NAME_L1}{Filing organization name, line 1.}
 #'   \item{ORG_NAME_L2}{Filing organization name, line 2 (if present).}
 #'   \item{RETURN_AMENDED_X}{Logical; `TRUE` if the filing is an amended return
@@ -217,26 +240,73 @@ get_keys <- function( doc, url ){
   TEMP_F9_00_TAX_YEAR <- paste( V1, V2 , sep='|' )
   TAX_YEAR <- retrieve_xml( doc, TEMP_F9_00_TAX_YEAR )
 
-  ## F9_00_ORG_501C_SUBSECTION: which 501(c) subsection the organization falls
-  ## under. The IRS stores this as an XML *attribute* rather than element text,
-  ## so the published tables carry only the F9_00_EXEMPT_STAT_501C_X checkbox --
-  ## that the org is a 501(c) other than (3) -- and never which one. Measured on
-  ## the TY2009-2024 archives: present on 1,457,404 filing-years, exactly one per
-  ## filing in every year, 990 and 990-EZ only, always a bare integer 2-29.
-  ## See dev/UPSTREAM-ISSUES.md EF2-12.
+  ## F9_00_ORG_EXEMPT_TYPE: the filing organization's tax-exempt status as one
+  ## coherent string -- "501c2".."501c29", "4947a1", "527", or NA. Values match
+  ## the naming Giving Tuesday's index uses in its TaxStatus column, so the two
+  ## line up without translation.
   ##
-  ## Attribute xpaths resolve through retrieve_xml() unchanged. Like every other
-  ## xpath here they need a namespace-stripped document, and like every other one
-  ## they return NA on the prefixed-irs: filings of EF2-11.
+  ## Deliberately a string, not an integer. 6 is a 501(c) subsection while 4947
+  ## and 527 are IRC sections; mixing them in one numeric column makes sorting,
+  ## ranges and means silently meaningless, and loses the (a)(1) of 4947(a)(1).
   ##
-  ## No first-match guard: >1 value per filing was never observed, and if it ever
-  ## happens this should fail loudly rather than silently pick one (cf. EF2-3).
+  ## Three encodings are reconciled here:
+  ##  * 501(c) other than (3) -- the subsection number is an XML *attribute*,
+  ##    which is why it reaches no published table. See EF2-12.
+  ##  * 501(c)(3) -- a checkbox element from TY2010 on. TY2009 has no such
+  ##    checkbox: (c)(3) filers write "3" into the attribute instead, so the
+  ##    attribute branch already yields "501c3" there. Harmonising the two is
+  ##    this variable's main job.
+  ##  * 4947(a)(1) -- a checkbox element; ~100-350 filings a year.
+  ##
+  ## 527 is carried for completeness and is expected never to fire: zero filings
+  ## declare it in TY2009-2024, the legacy concordance xpath matches nothing in
+  ## any year, and Giving Tuesday's index has no 527 row either. The *Ind paths
+  ## are unobserved placeholders in case the schema ever produces one.
+  ##
+  ## Checked before relying on presence: every indicator carries "X", never "0"
+  ## or "false", in TY2009, TY2012 and TY2024. Attribute xpaths resolve through
+  ## retrieve_xml() unchanged, and like every xpath here they need a
+  ## namespace-stripped document (EF2-11).
   V1 <- '//Return/ReturnData/IRS990/Organization501c/@typeOf501cOrganization'
   V2 <- '//Return/ReturnData/IRS990EZ/Organization501c/@typeOf501cOrganization'
   V3 <- '//Return/ReturnData/IRS990/Organization501cInd/@organization501cTypeTxt'
   V4 <- '//Return/ReturnData/IRS990EZ/Organization501cInd/@organization501cTypeTxt'
-  TEMP_F9_00_ORG_501C_SUBSECTION <- paste( V1, V2, V3, V4 , sep='|' )
-  ORG_501C_SUBSECTION <- retrieve_xml( doc, TEMP_F9_00_ORG_501C_SUBSECTION )
+  SUBSECTION_501C <- retrieve_xml( doc, paste( V1, V2, V3, V4, sep='|' ) )
+
+  V1 <- '//Return/ReturnData/IRS990/Organization501c3'
+  V2 <- '//Return/ReturnData/IRS990/Organization501c3Ind'
+  V3 <- '//Return/ReturnData/IRS990EZ/Organization501c3'
+  V4 <- '//Return/ReturnData/IRS990EZ/Organization501c3Ind'
+  IND_501C3 <- retrieve_xml( doc, paste( V1, V2, V3, V4, sep='|' ) )
+
+  V1 <- '//Return/ReturnData/IRS990/Organization4947a1'
+  V2 <- '//Return/ReturnData/IRS990/Organization4947a1NotPFInd'
+  V3 <- '//Return/ReturnData/IRS990/Form990PartI/Organization4947a1'
+  V4 <- '//Return/ReturnData/IRS990EZ/Organization4947a1'
+  V5 <- '//Return/ReturnData/IRS990EZ/Organization4947a1NotPFInd'
+  IND_4947A1 <- retrieve_xml( doc, paste( V1, V2, V3, V4, V5, sep='|' ) )
+
+  V1 <- '//Return/ReturnData/IRS990/Form990PartI/Organization527'
+  V2 <- '//Return/ReturnData/IRS990/Organization527'
+  V3 <- '//Return/ReturnData/IRS990/Organization527Ind'
+  V4 <- '//Return/ReturnData/IRS990EZ/Organization527'
+  V5 <- '//Return/ReturnData/IRS990EZ/Organization527Ind'
+  IND_527 <- retrieve_xml( doc, paste( V1, V2, V3, V4, V5, sep='|' ) )
+
+  ## No first-match guard on the subsection: exactly one value per filing was
+  ## measured in every year, and if a filing ever carries two this should fail
+  ## loudly rather than silently pick one (cf. EF2-3, where .SD[1] did exactly
+  ## that and reported a 990-EZ location code for a 990-only detector).
+  ORG_EXEMPT_TYPE <- NA_character_
+  if( ! all( is.na( SUBSECTION_501C ) ) ){
+    ORG_EXEMPT_TYPE <- paste0( "501c", SUBSECTION_501C )
+  } else if( ticked( IND_501C3 ) ){
+    ORG_EXEMPT_TYPE <- "501c3"
+  } else if( ticked( IND_4947A1 ) ){
+    ORG_EXEMPT_TYPE <- "4947a1"
+  } else if( ticked( IND_527 ) ){
+    ORG_EXEMPT_TYPE <- "527"
+  }
 
   ## F9_00_ORG_EIN
   ORG_EIN <- retrieve_xml(  doc, '/Return/ReturnHeader/Filer/EIN' )
@@ -247,7 +317,7 @@ get_keys <- function( doc, url ){
   RETURN_PARTIAL_X <- RETURN_TAXPER_DAYS < 360
 
   var.list <-
-  namedList(EIN2,OBJECTID,ORG_501C_SUBSECTION,ORG_EIN,ORG_NAME_L1,ORG_NAME_L2,RETURN_AMENDED_X,RETURN_GROUP_X,RETURN_PARTIAL_X,RETURN_TAXPER_DAYS,RETURN_TIME_STAMP,RETURN_TYPE,TAX_PERIOD_BEGIN_DATE,TAX_PERIOD_END_DATE,TAX_YEAR,URL,VERSION)
+  namedList(EIN2,OBJECTID,ORG_EIN,ORG_EXEMPT_TYPE,ORG_NAME_L1,ORG_NAME_L2,RETURN_AMENDED_X,RETURN_GROUP_X,RETURN_PARTIAL_X,RETURN_TAXPER_DAYS,RETURN_TIME_STAMP,RETURN_TYPE,TAX_PERIOD_BEGIN_DATE,TAX_PERIOD_END_DATE,TAX_YEAR,URL,VERSION)
   return( var.list )
 }
 

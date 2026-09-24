@@ -1217,6 +1217,79 @@ did.
 **Do not** add `interestAmt` (297 filing-years panel-wide) or anything in the
 plumbing bucket. `returnVersion` is already `VERSION`; do not duplicate it.
 
+### Resolved: `ORG_EXEMPT_TYPE` in `get_keys()` (2026-09-24)
+
+Implemented as one coherent string rather than the bare subsection integer:
+`"501c2"`…`"501c29"`, `"4947a1"`, `"527"`, or `NA`. A string because `6` is a
+501(c) subsection while `4947` and `527` are IRC sections — mixing them in one
+numeric column makes sorting, ranges and means silently meaningless, and loses
+the `(a)(1)`.
+
+The values match the `TaxStatus` naming in Giving Tuesday's index
+(`501c3`, `501c6`, `4947a1`), so the two line up without a translation table.
+That was not designed for; it was found afterwards and kept.
+
+Three encodings are reconciled. The (c)(3) checkbox arrives in TY2010; in TY2009
+there is no such checkbox and (c)(3) filers write `3` into the subsection
+attribute instead — **all 39,633 literal `3` values in the whole panel are
+TY2009, and none of them tick a (c)(3) box.** Without harmonising, TY2009 reports
+39,633 subsection-3 organizations and every later year reports none, which reads
+as a defect rather than as two spellings of one fact.
+
+Verified against 27 real filings across TY2009, TY2012 and TY2024, covering
+501(c)(N), 501(c)(3) in both encodings, and 4947(a)(1): 27 of 27 agree with the
+databases. 29 unit tests.
+
+### Where the 527 organizations are: not here, and not filtered out either
+
+`F9_00_EXEMPT_STAT_527_X` exists in the concordance, maps to the single xpath
+`/Return/ReturnData/IRS990/Form990PartI/Organization527`, and **matches nothing
+in any of TY2009–2024** — an EF2-9-class dead variable. Searching raw `XPATH2`
+for `527` so an unmapped element could not hide, every hit is one of two other
+things, neither of which is the filer's own status:
+
+| element | what it actually asks |
+|---|---|
+| `IRS990EZ/RelatedOrgSect527OrgInd` → `F9_04_RLTD_ORG_527_X` | are you *related to* a 527 organization? (990-EZ Part V) |
+| `IRS990ScheduleC/Section527PoliticalOrgGrp/*` | the 527 organizations the filer *paid* (Sch C Part I-C) |
+
+The coverage arithmetic leaves no room for them either. TY2024: 351,605 (c)(3)
+plus 104,296 (c)(other) plus 266 4947(a)(1) plus 3 with no status = 456,170,
+exactly the `KEYS` count. The four statuses are perfectly mutually exclusive.
+
+**They are not being filtered out.** Giving Tuesday's index carries only four
+`FormType` values across 7.5M rows — `990`, `990EZ`, `990PF`, `990T` — and no
+`527`. Its `TaxStatus` column runs `501c3`, `501c2`…`501c29`, `4947a1` and `NA`,
+again with **no 527 value anywhere**. So 527 filings are absent from the source
+corpus, not dropped during the build.
+
+For context, and *not* verified from these data: §527 political organizations
+report to the IRS on Forms 8871 and 8872 through a separate disclosure system,
+which is not part of the 990 e-file pipeline. A 527 with $25k+ gross receipts
+that is not an FEC-reporting committee can also owe a Form 990/990-EZ; none
+appears in this corpus declaring that status, but some could sit among the
+`NA`-status filings without saying so.
+
+### 990-PF *is* in the data lake and is dropped by the build
+
+Distinct from the 527 case, and worth not confusing with it. `prep_index()`
+defaults to `form.type = c("990", "990EZ")`, and `split_index()` calls it
+without overriding that default, so the archives can never contain anything
+else. Against the current index:
+
+| FormType | rows in the index | in the ef2 build? |
+|---|---|---|
+| `990` | 3,965,080 | yes |
+| `990EZ` | 2,218,958 | yes |
+| `990PF` | **1,201,201** | **dropped** |
+| `990T` | **114,313** | **dropped** |
+
+1,315,514 filings are excluded by that one default — 990-PF from TY2008 and
+990-T from TY2020. `get_keys()` already reads the 990-PF amended-return element,
+so the parsing side is partly ready; the exclusion is a batching decision, not a
+capability gap. Whether to include them is a scope question for the build, not a
+defect.
+
 ### Open design question
 
 Adding these to `KEYS` via `get_keys()` is mechanical and needs no new

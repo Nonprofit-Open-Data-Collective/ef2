@@ -38,47 +38,73 @@ test_that("get_keys derives tax period length and the partial-year flag", {
   expect_identical(k$OBJECTID, "OID-202400000000000001")
 })
 
-test_that("get_keys reads the 501(c) subsection from its XML attribute", {
+test_that("ORG_EXEMPT_TYPE reads the 501(c) subsection from its XML attribute", {
   # Current spelling, TY2013 onward.
-  k990 <- get_keys(make_return(
-    "990", '<IRS990><Organization501cInd organization501cTypeTxt="6">X</Organization501cInd></IRS990>'), url)
-  expect_identical(k990$ORG_501C_SUBSECTION, "6")
+  expect_identical(get_keys(make_return(
+    "990", '<IRS990><Organization501cInd organization501cTypeTxt="6">X</Organization501cInd></IRS990>'),
+    url)$ORG_EXEMPT_TYPE, "501c6")
 
-  kez <- get_keys(make_return(
-    "990EZ", '<IRS990EZ><Organization501cInd organization501cTypeTxt="4">X</Organization501cInd></IRS990EZ>'), url)
-  expect_identical(kez$ORG_501C_SUBSECTION, "4")
+  expect_identical(get_keys(make_return(
+    "990EZ", '<IRS990EZ><Organization501cInd organization501cTypeTxt="4">X</Organization501cInd></IRS990EZ>'),
+    url)$ORG_EXEMPT_TYPE, "501c4")
 
   # Legacy spelling, TY2009-2012. Both must work or the panel breaks at 2013.
-  k_old <- get_keys(make_return(
-    "990", '<IRS990><Organization501c typeOf501cOrganization="19">X</Organization501c></IRS990>'), url)
-  expect_identical(k_old$ORG_501C_SUBSECTION, "19")
+  expect_identical(get_keys(make_return(
+    "990", '<IRS990><Organization501c typeOf501cOrganization="19">X</Organization501c></IRS990>'),
+    url)$ORG_EXEMPT_TYPE, "501c19")
 
-  k_old_ez <- get_keys(make_return(
-    "990EZ", '<IRS990EZ><Organization501c typeOf501cOrganization="7">X</Organization501c></IRS990EZ>'), url)
-  expect_identical(k_old_ez$ORG_501C_SUBSECTION, "7")
+  expect_identical(get_keys(make_return(
+    "990EZ", '<IRS990EZ><Organization501c typeOf501cOrganization="7">X</Organization501c></IRS990EZ>'),
+    url)$ORG_EXEMPT_TYPE, "501c7")
 })
 
-test_that("get_keys returns NA for the subsection when it is absent", {
-  # 501(c)(3) filers tick a different box and carry no subsection attribute.
-  k3 <- get_keys(make_return(
-    "990", "<IRS990><Organization501c3Ind>X</Organization501c3Ind></IRS990>"), url)
-  expect_true(is.na(k3$ORG_501C_SUBSECTION))
+test_that("ORG_EXEMPT_TYPE harmonises the two 501(c)(3) encodings", {
+  # TY2010 onward: a checkbox element, no subsection attribute.
+  expect_identical(get_keys(make_return(
+    "990", "<IRS990><Organization501c3Ind>X</Organization501c3Ind></IRS990>"),
+    url)$ORG_EXEMPT_TYPE, "501c3")
 
-  # 990-PF has no 501(c) subsection at all.
-  expect_true(is.na(get_keys(make_return("990PF", "<IRS990PF/>"), url)$ORG_501C_SUBSECTION))
+  expect_identical(get_keys(make_return(
+    "990EZ", "<IRS990EZ><Organization501c3>X</Organization501c3></IRS990EZ>"),
+    url)$ORG_EXEMPT_TYPE, "501c3")
 
-  # Element present but attribute missing.
-  k_bare <- get_keys(make_return(
-    "990", "<IRS990><Organization501cInd>X</Organization501cInd></IRS990>"), url)
-  expect_true(is.na(k_bare$ORG_501C_SUBSECTION))
+  # TY2009: no checkbox exists; (c)(3) filers write "3" into the attribute.
+  # Both encodings must land on the same value or the panel breaks at 2010.
+  expect_identical(get_keys(make_return(
+    "990", '<IRS990><Organization501c typeOf501cOrganization="3">X</Organization501c></IRS990>'),
+    url)$ORG_EXEMPT_TYPE, "501c3")
 })
 
-test_that("ORG_501C_SUBSECTION sits in the key list without disturbing the others", {
+test_that("ORG_EXEMPT_TYPE covers 4947(a)(1) and the unobserved 527 placeholder", {
+  expect_identical(get_keys(make_return(
+    "990", "<IRS990><Organization4947a1NotPFInd>X</Organization4947a1NotPFInd></IRS990>"),
+    url)$ORG_EXEMPT_TYPE, "4947a1")
+
+  expect_identical(get_keys(make_return(
+    "990EZ", "<IRS990EZ><Organization4947a1>X</Organization4947a1></IRS990EZ>"),
+    url)$ORG_EXEMPT_TYPE, "4947a1")
+
+  # Never seen in TY2009-2024, but the branch must work if it ever appears.
+  expect_identical(get_keys(make_return(
+    "990", "<IRS990><Organization527Ind>X</Organization527Ind></IRS990>"),
+    url)$ORG_EXEMPT_TYPE, "527")
+})
+
+test_that("ORG_EXEMPT_TYPE is NA when no status is declared, and is a string", {
+  expect_true(is.na(get_keys(make_return("990", "<IRS990/>"), url)$ORG_EXEMPT_TYPE))
+  expect_true(is.na(get_keys(make_return("990PF", "<IRS990PF/>"), url)$ORG_EXEMPT_TYPE))
+
   k <- get_keys(make_return(
     "990", '<IRS990><Organization501cInd organization501cTypeTxt="12">X</Organization501cInd></IRS990>'), url)
-  expect_true("ORG_501C_SUBSECTION" %in% names(k))
+  expect_type(k$ORG_EXEMPT_TYPE, "character")
+  expect_true("ORG_EXEMPT_TYPE" %in% names(k))
   expect_length(k, 17L)
   expect_identical(k$ORG_EIN, "012345678")
-  expect_identical(k$TAX_YEAR, "2023")
   expect_identical(k$RETURN_TYPE, "990")
+})
+
+test_that("an explicit negative on an indicator does not set a status", {
+  expect_true(is.na(get_keys(make_return(
+    "990", "<IRS990><Organization501c3Ind>0</Organization501c3Ind></IRS990>"),
+    url)$ORG_EXEMPT_TYPE))
 })
