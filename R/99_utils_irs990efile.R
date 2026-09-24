@@ -111,6 +111,10 @@ namedList <- function(...){
 #' \describe{
 #'   \item{EIN2}{Employer Identification Number formatted as `EIN-XX-XXXXXXX` (see [format_ein()]).}
 #'   \item{OBJECTID}{Unique filing identifier prefixed with `OID-`, derived from `url` (see [get_object_id()]).}
+#'   \item{ORG_501C_SUBSECTION}{501(c) subsection number (`"2"`–`"29"`), or `NA`
+#'     for 501(c)(3) organizations, 990-PF filers and anyone who left it blank.
+#'     The IRS stores this as an XML *attribute*, so it reaches no published
+#'     table other than through this key; see `dev/UPSTREAM-ISSUES.md` EF2-12.}
 #'   \item{ORG_EIN}{Raw Employer Identification Number digits from the return header.}
 #'   \item{ORG_NAME_L1}{Filing organization name, line 1.}
 #'   \item{ORG_NAME_L2}{Filing organization name, line 2 (if present).}
@@ -213,6 +217,27 @@ get_keys <- function( doc, url ){
   TEMP_F9_00_TAX_YEAR <- paste( V1, V2 , sep='|' )
   TAX_YEAR <- retrieve_xml( doc, TEMP_F9_00_TAX_YEAR )
 
+  ## F9_00_ORG_501C_SUBSECTION: which 501(c) subsection the organization falls
+  ## under. The IRS stores this as an XML *attribute* rather than element text,
+  ## so the published tables carry only the F9_00_EXEMPT_STAT_501C_X checkbox --
+  ## that the org is a 501(c) other than (3) -- and never which one. Measured on
+  ## the TY2009-2024 archives: present on 1,457,404 filing-years, exactly one per
+  ## filing in every year, 990 and 990-EZ only, always a bare integer 2-29.
+  ## See dev/UPSTREAM-ISSUES.md EF2-12.
+  ##
+  ## Attribute xpaths resolve through retrieve_xml() unchanged. Like every other
+  ## xpath here they need a namespace-stripped document, and like every other one
+  ## they return NA on the prefixed-irs: filings of EF2-11.
+  ##
+  ## No first-match guard: >1 value per filing was never observed, and if it ever
+  ## happens this should fail loudly rather than silently pick one (cf. EF2-3).
+  V1 <- '//Return/ReturnData/IRS990/Organization501c/@typeOf501cOrganization'
+  V2 <- '//Return/ReturnData/IRS990EZ/Organization501c/@typeOf501cOrganization'
+  V3 <- '//Return/ReturnData/IRS990/Organization501cInd/@organization501cTypeTxt'
+  V4 <- '//Return/ReturnData/IRS990EZ/Organization501cInd/@organization501cTypeTxt'
+  TEMP_F9_00_ORG_501C_SUBSECTION <- paste( V1, V2, V3, V4 , sep='|' )
+  ORG_501C_SUBSECTION <- retrieve_xml( doc, TEMP_F9_00_ORG_501C_SUBSECTION )
+
   ## F9_00_ORG_EIN
   ORG_EIN <- retrieve_xml(  doc, '/Return/ReturnHeader/Filer/EIN' )
 
@@ -222,7 +247,7 @@ get_keys <- function( doc, url ){
   RETURN_PARTIAL_X <- RETURN_TAXPER_DAYS < 360
 
   var.list <-
-  namedList(EIN2,OBJECTID,ORG_EIN,ORG_NAME_L1,ORG_NAME_L2,RETURN_AMENDED_X,RETURN_GROUP_X,RETURN_PARTIAL_X,RETURN_TAXPER_DAYS,RETURN_TIME_STAMP,RETURN_TYPE,TAX_PERIOD_BEGIN_DATE,TAX_PERIOD_END_DATE,TAX_YEAR,URL,VERSION)
+  namedList(EIN2,OBJECTID,ORG_501C_SUBSECTION,ORG_EIN,ORG_NAME_L1,ORG_NAME_L2,RETURN_AMENDED_X,RETURN_GROUP_X,RETURN_PARTIAL_X,RETURN_TAXPER_DAYS,RETURN_TIME_STAMP,RETURN_TYPE,TAX_PERIOD_BEGIN_DATE,TAX_PERIOD_END_DATE,TAX_YEAR,URL,VERSION)
   return( var.list )
 }
 

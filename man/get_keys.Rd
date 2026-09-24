@@ -18,6 +18,10 @@ one-row data frame:
 \describe{
 \item{EIN2}{Employer Identification Number formatted as \code{EIN-XX-XXXXXXX} (see \code{\link[=format_ein]{format_ein()}}).}
 \item{OBJECTID}{Unique filing identifier prefixed with \verb{OID-}, derived from \code{url} (see \code{\link[=get_object_id]{get_object_id()}}).}
+\item{ORG_501C_SUBSECTION}{501(c) subsection number (\code{"2"}–\code{"29"}), or \code{NA}
+for 501(c)(3) organizations, 990-PF filers and anyone who left it blank.
+The IRS stores this as an XML \emph{attribute}, so it reaches no published
+table other than through this key; see \code{dev/UPSTREAM-ISSUES.md} EF2-12.}
 \item{ORG_EIN}{Raw Employer Identification Number digits from the return header.}
 \item{ORG_NAME_L1}{Filing organization name, line 1.}
 \item{ORG_NAME_L2}{Filing organization name, line 2 (if present).}
