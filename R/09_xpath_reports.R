@@ -28,6 +28,7 @@
 #'   \describe{
 #'     \item{xpath}{Unique XPATH2 string}
 #'     \item{count_occurrences}{Number of occurrences in `FLATXML`}
+#'     \item{count_filings}{Number of distinct filings (`OBJECTID`) using the xpath}
 #'     \item{schema_versions}{Comma-separated list of distinct schema versions}
 #'   }
 #'
@@ -58,7 +59,7 @@ generate_xpath_report <- function(year,
   }
 
   # Connect to database
-  con <- DBI::dbConnect(duckdb::duckdb(), db_path)
+  con <- DBI::dbConnect(duckdb::duckdb(), db_path, read_only = TRUE)
 
   # SQL query
   sql <- "
@@ -69,6 +70,7 @@ generate_xpath_report <- function(year,
   JOINED AS (
       SELECT 
           F.XPATH2 AS xpath,
+          F.OBJECTID,
           K.VERSION
       FROM FLATXML AS F
       INNER JOIN KEYS_CLEAN AS K
@@ -77,10 +79,11 @@ generate_xpath_report <- function(year,
   SELECT 
       xpath,
       COUNT(*) AS count_occurrences,
-      STRING_AGG(DISTINCT VERSION, ', ') AS schema_versions
+      COUNT(DISTINCT OBJECTID) AS count_filings,
+      STRING_AGG(DISTINCT VERSION, ', ' ORDER BY VERSION) AS schema_versions
   FROM JOINED
   GROUP BY xpath
-  ORDER BY count_occurrences DESC;
+  ORDER BY count_occurrences DESC, xpath;
   "
 
   # Execute and fetch results
@@ -158,7 +161,8 @@ process_xpaths <- function(years,
   message("?? Generating XPATH reports for years: ", paste(years, collapse = ", "))
   purrr::walk(years, generate_xpath_report, base_path = base_path)
 
-  files <- list.files(xpath_dir, pattern = "\\.csv$", full.names = TRUE)
+  # Only the per-year reports; ALL-XPATHS.csv from a previous run would double count
+  files <- list.files(xpath_dir, pattern = "^[0-9]{4}-XPATH-REPORT\\.csv$", full.names = TRUE)
   L <- purrr::map(files, read.csv)
   xp <- dplyr::bind_rows(L)
 
@@ -167,6 +171,7 @@ process_xpaths <- function(years,
     dplyr::group_by(xpath) %>%
     dplyr::summarize(
       count_occurrences = sum(count_occurrences),
+      count_filings = sum(count_filings),
       schema_versions = paste0(schema_versions, collapse = ", ")
     ) %>%
     dplyr::arrange(dplyr::desc(count_occurrences)) %>%
@@ -176,7 +181,7 @@ process_xpaths <- function(years,
   df$first_year <- vapply(df$schema_versions, get_first_year, FUN.VALUE = character(1))
   df$last_year <- vapply(df$schema_versions, get_last_year, FUN.VALUE = character(1))
   df$latest_version <- df$last_year
-  df$current_version <- df$last_year == format(Sys.Date(), "%Y")
+  df$current_version <- df$last_year == max(df$last_year)
 
   # Merge with concordance if available
   if (!is.null(concordance)) {
@@ -189,7 +194,8 @@ process_xpaths <- function(years,
   # Add path type if get_type() is provided
   if (!is.null(get_type) && is.function(get_type)) {
     message("??? Classifying path types...")
-    type <- vapply(f2$xpath, get_type, FUN.VALUE = character(1))
+    # get_type() classifies relative to the whole set, so call it once on all xpaths
+    type <- get_type(f2$xpath)
     f2$path_type <- ifelse(type == "parent", "HEADER", "DATA")
   }
 

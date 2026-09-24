@@ -915,6 +915,12 @@ Zero there means the xpath is a concordance entry for a node that never
 shipped. Nonzero would mean the opposite and a much more interesting defect —
 data present in the XML and dropped on the floor.
 
+**Answered 2026-09-23: zero in every year.** The xpath reports in
+`xpath_reports/` cover all of `FLATXML` for TY2009–2024. `RelationshipSchedule`
+appears only in `ALL-XPATHS.csv`'s concordance columns and has no occurrence
+count in any year, so the concordance lists a node that no filing ever used.
+Proceed with the concordance fix.
+
 **Action if confirmed:** fix it in the concordance, not in the build. Either
 remove the row — which retires the table, 112 → 111 — or, if a real Schedule A
 node was intended, correct the xpath to that node. Do **not** special-case the
@@ -1017,6 +1023,55 @@ TY2009–2024 rebuilt to CSV + Parquet, **1,792 pairs, all verified byte-equal b
 `verify_table_output()`, zero warnings across all 16 years**. Both crashes cost
 progress, not correctness. TY2012 and TY2016 — the two interrupted years — carry
 the same 112/112 verification as the other fourteen.
+
+---
+
+## EF2-11 — filings with a prefixed `irs:` namespace lose their keys
+
+Found 2026-09-23 while running `process_xpaths()` over the September 2026 build
+(`EFILE_BUILD_SEPT_2026`, TY2009–2024).
+
+A few filings put the elements under a **prefixed** namespace, not the default
+one:
+
+```xml
+<irs:Return xmlns="http://www.irs.gov/efile" xmlns:irs="http://www.irs.gov/efile" ...>
+  <irs:ReturnHeader>
+```
+
+`xml2::xml_ns_strip()` leaves the `irs:` prefix in place. In the build databases:
+
+- **`XPATH` and `XPATH2` both keep the prefix** (`/irs:Return/irs:ReturnHeader/...`),
+  so no row matches the concordance: `RDB_TABLE` is blank and `VARIABLE_NAME`
+  falls back to `irs:ReturnTs` and similar. These filings reach no published table.
+- **`KEYS` is blank.** `ORG_EIN`, `TAX_YEAR`, `RETURN_TYPE` and the tax period are
+  all NULL. Only `VERSION` and `URL` are populated.
+
+41 filings across the whole panel, plus one `/efile:` variant:
+
+| TY | 2017 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 |
+|---|---|---|---|---|---|---|---|
+| filings | 1 | 1 | 2 | 13 | 12 | 9 | 3 |
+
+They add **1,051 junk xpaths** to the xpath reports, which is 12% of all distinct
+xpaths but comes from 0.001% of filings.
+
+**What current code does.** `flatten_xml()` already runs
+`gsub("irs:", "", ...)` and `gsub("efile:", "", ...)` on `XPATH2`. The build
+databases still contain prefixed `XPATH2`, so whatever produced them did not apply
+that step. Re-flattening one of these filings with current code
+(`202301719349301665_public.xml`) gives a clean `XPATH2`, and 265 of its 311
+rows map to a table. **`get_keys()` still returns NA** for `ORG_EIN` and
+`TAX_YEAR`, because its xpaths do not see through the prefix. So the key half of
+this defect is still live.
+
+In every year, the count of NULL-`ORG_EIN` rows in `KEYS` equals the count of
+prefixed filings, except TY2024 (5 vs 3). EF2-2 may be the same mechanism;
+check its two OBJECTIDs against this list.
+
+**Fix:** strip the prefix from the document before `get_keys()` runs, not only
+from the xpath strings. Rebuilding these ~41 filings is enough; no full rebuild
+is needed.
 
 ---
 
