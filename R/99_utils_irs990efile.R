@@ -114,12 +114,14 @@ namedList <- function(...){
 #'   \item{ORG_EIN}{Raw Employer Identification Number digits from the return header.}
 #'   \item{ORG_NAME_L1}{Filing organization name, line 1.}
 #'   \item{ORG_NAME_L2}{Filing organization name, line 2 (if present).}
-#'   \item{RETURN_AMENDED_X}{Logical; `TRUE` if the filing is an amended return.}
-#'   \item{RETURN_GROUP_X}{Logical; `TRUE` if the filing is a group return for affiliates.}
+#'   \item{RETURN_AMENDED_X}{Logical; `TRUE` if the filing is an amended return
+#'     (read from the 990, 990-EZ or 990-PF amended-return element).}
+#'   \item{RETURN_GROUP_X}{Logical; `TRUE` if the filing is a group return for
+#'     affiliates. Always `FALSE` for the 990-EZ and 990-PF, which have no group returns.}
 #'   \item{RETURN_PARTIAL_X}{Logical; `TRUE` if the tax period spans fewer than 360 days (partial-year return).}
 #'   \item{RETURN_TAXPER_DAYS}{Number of days in the tax period (end minus begin, plus 1).}
 #'   \item{RETURN_TIME_STAMP}{Timestamp when the return was created/submitted.}
-#'   \item{RETURN_TYPE}{Return type (e.g. `"990"`, `"990EZ"`).}
+#'   \item{RETURN_TYPE}{Return type (e.g. `"990"`, `"990EZ"`, `"990PF"`).}
 #'   \item{TAX_PERIOD_BEGIN_DATE}{Tax period begin date.}
 #'   \item{TAX_PERIOD_END_DATE}{Tax period end date.}
 #'   \item{TAX_YEAR}{Tax year covered by the filing.}
@@ -158,12 +160,15 @@ get_keys <- function( doc, url ){
   RETURN_TYPE <- retrieve_xml( doc, TEMP_F9_00_RETURN_TYPE )
 
   ## F9_00_RETURN_AMENDED_X: indicates an amended return
+  ## (990, 990-EZ and 990-PF; the PF element sits under IRS990PF)
   V1 <- '//Return/ReturnData/IRS990/AmendedReturn'
   V2 <- '//Return/ReturnData/IRS990/AmendedReturnInd'
   V3 <- '//Return/ReturnData/IRS990/Form990PartI/AmendedReturn'
   V4 <- '//Return/ReturnData/IRS990EZ/AmendedReturn'
   V5 <- '//Return/ReturnData/IRS990EZ/AmendedReturnInd'
-  TEMP_F9_00_RETURN_AMENDED_X <- paste( V1, V2, V3, V4, V5 , sep='|' )
+  V6 <- '//Return/ReturnData/IRS990PF/AmendedReturn'
+  V7 <- '//Return/ReturnData/IRS990PF/AmendedReturnInd'
+  TEMP_F9_00_RETURN_AMENDED_X <- paste( V1, V2, V3, V4, V5, V6, V7 , sep='|' )
   RETURN_AMENDED_X <- retrieve_xml( doc, TEMP_F9_00_RETURN_AMENDED_X )
   RETURN_AMENDED_X <- standardize_boole(  RETURN_AMENDED_X )
 
