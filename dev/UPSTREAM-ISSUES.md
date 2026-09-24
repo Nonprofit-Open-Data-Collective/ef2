@@ -1253,9 +1253,42 @@ things, neither of which is the filer's own status:
 | `IRS990EZ/RelatedOrgSect527OrgInd` → `F9_04_RLTD_ORG_527_X` | are you *related to* a 527 organization? (990-EZ Part V) |
 | `IRS990ScheduleC/Section527PoliticalOrgGrp/*` | the 527 organizations the filer *paid* (Sch C Part I-C) |
 
-The coverage arithmetic leaves no room for them either. TY2024: 351,605 (c)(3)
-plus 104,296 (c)(other) plus 266 4947(a)(1) plus 3 with no status = 456,170,
-exactly the `KEYS` count. The four statuses are perfectly mutually exclusive.
+The coverage arithmetic leaves no room for them either — see the all-years
+check below, where the 527 column is zero in every one of the sixteen years.
+
+### Checked across all sixteen years, by xpath (2026-09-24)
+
+Detected on `XPATH2` rather than on `VARIABLE_NAME`
+(`(^|/)(irs:|efile:)?Organization501c3(Ind)?$` and siblings) so that unmapped
+and namespace-prefixed variants cannot hide:
+
+- **No filing ever selects more than one exempt status. Zero, TY2009–2024.**
+  Every year resolves into exactly three single-selection groups. The statuses
+  are genuinely mutually exclusive, not merely so in a sampled year, and the
+  `if/else if` chain in `ORG_EXEMPT_TYPE` orders branches that cannot co-occur
+  rather than resolving real conflicts.
+- **No filing ever selects 527. Zero, TY2009–2024.**
+
+| year | 501(c)(3) | 501(c) other | 4947(a)(1) | >1 selected | 527 |
+|---|---|---|---|---|---|
+| 2009 | — | 48,768 | 13 | 0 | 0 |
+| 2012 | 204,706 | 68,570 | 162 | 0 | 0 |
+| 2018 | 321,182 | 99,495 | 149 | 0 | 0 |
+| 2024 | 351,608 | 104,296 | 266 | 0 | 0 |
+
+**Correcting an earlier count in this entry.** TY2024 is 351,608 (c)(3)
+filings, not 351,605, and there are **no filings with no declared status** —
+coverage is 456,170 of 456,170. The three filings previously counted as
+undeclared do declare (c)(3); they are the EF2-11 prefixed-namespace filings,
+and matching on `VARIABLE_NAME` missed them because the `irs:` prefix stops the
+concordance mapping. Confirmed directly: exactly 3 TY2024 filings carry a
+prefixed `Organization501c3` element, and all 3 have NULL `ORG_EIN` and NULL
+`TAX_YEAR` — the EF2-11 signature.
+
+The practical consequence, now measured rather than predicted: **`ORG_EXEMPT_TYPE`
+returns `NA` on those 3 filings**, because `get_keys()` uses unprefixed xpaths,
+exactly as `ORG_EIN` and `TAX_YEAR` already do. Fixing EF2-11 fixes all three
+fields at once; nothing separate is needed here.
 
 **They are not being filtered out.** Giving Tuesday's index carries only four
 `FormType` values across 7.5M rows — `990`, `990EZ`, `990PF`, `990T` — and no

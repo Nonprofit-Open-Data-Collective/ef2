@@ -256,7 +256,10 @@ get_keys <- function( doc, url ){
   ##    checkbox: (c)(3) filers write "3" into the attribute instead, so the
   ##    attribute branch already yields "501c3" there. Harmonising the two is
   ##    this variable's main job.
-  ##  * 4947(a)(1) -- a checkbox element; ~100-350 filings a year.
+  ##  * 4947(a)(1) -- a checkbox element; 13 to 363 filings a year.
+  ##
+  ## The branches are ordered but never actually compete: checked by xpath across
+  ## all of TY2009-2024, no filing ever selects more than one exempt status.
   ##
   ## 527 is carried for completeness and is expected never to fire: zero filings
   ## declare it in TY2009-2024, the legacy concordance xpath matches nothing in
