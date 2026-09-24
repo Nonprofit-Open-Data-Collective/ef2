@@ -133,20 +133,18 @@ get_header <- function( xpath, type ){
 #' @return Character vector of unique parent xpaths.
 #' @export
 find_parent_nodes <- function(xpath_list) {
+  # Every proper prefix (ending before a "/") of every xpath, in the order the
+  # sorted input first reaches it -- the same result as the original nested
+  # loop, which grew a vector and searched a list of names on every step and
+  # so took hours on large filings.
   xpath_list <- sort(xpath_list)
-  parent_nodes <- character()
-  seen <- list()
-  for (xpath in xpath_list) {
-    parts <- strsplit(xpath, "/")[[1]]
-    for (i in seq_len(length(parts) - 1)) {
-      parent <- paste(parts[1:i], collapse = "/")
-      if (!parent %in% names(seen)) {
-        parent_nodes <- c(parent_nodes, parent)
-        seen[[parent]] <- TRUE
-      }
-    }
-  }
-  return(unique(parent_nodes))
+  parts <- strsplit(xpath_list, "/", fixed = TRUE)
+  parents <- unlist(lapply(parts, function(p) {
+    n <- length(p) - 1
+    if (n < 1) return(character())
+    vapply(seq_len(n), function(i) paste(p[1:i], collapse = "/"), character(1))
+  }), use.names = FALSE)
+  return(unique(parents))
 }
 
 #' Find terminal node xpaths for a set of xpaths
@@ -155,14 +153,15 @@ find_parent_nodes <- function(xpath_list) {
 #' @return Character vector of terminal xpaths.
 #' @export
 find_terminal_nodes <- function(xpath_list) {
+  # An xpath is terminal when the next one in sorted order does not extend it.
+  # Vectorized form of the original loop (same sort, same test, same output);
+  # the loop grew its result with c() and was quadratic on large filings.
   xpath_list <- sort(xpath_list)
-  terminal_nodes <- c()
-  for (i in seq_along(xpath_list)) {
-    if (i == length(xpath_list) || !startsWith(xpath_list[i + 1], paste0(xpath_list[i], "/"))) {
-      terminal_nodes <- c(terminal_nodes, xpath_list[i])
-    }
-  }
-  return(terminal_nodes)
+  if (!length(xpath_list)) return(NULL)
+  nxt <- c(xpath_list[-1], "")
+  is_terminal <- !startsWith(nxt, paste0(xpath_list, "/"))
+  is_terminal[length(xpath_list)] <- TRUE
+  return(xpath_list[is_terminal])
 }
 
 #' Classify xpaths as parent or terminal
