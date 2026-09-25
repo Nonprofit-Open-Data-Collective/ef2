@@ -101,10 +101,90 @@ get_n <- function(x) {
 #' @return Character vector like "TID-00003".
 #' @export
 get_table_id <- function( xpaths ) {
-  table.n <- sapply( xpaths, get_n, USE.NAMES=FALSE )
+  # Vectorized get_n(): the last "[digits]" index in each xpath, "0" if none.
+  # Same result as sapply(xpaths, get_n), without one regex call per element.
+  table.n <- rep( "0", length(xpaths) )
+  has.n   <- grepl( "\\[[0-9]+\\]", xpaths )
+  table.n[has.n] <- sub( "^.*\\[([0-9]+)\\].*$", "\\1", xpaths[has.n] )
   table.n <- sprintf( "%05.0f", as.numeric(table.n) )
   table.n <- paste0( "TID-", table.n )
   return( table.n )  
+}
+
+#' Remove default namespaces from a document (fast xml_ns_strip)
+#'
+#' Same result as `xml2::xml_ns_strip()`, which removes `xmlns` from every
+#' element that has a default namespace *in scope*. Every element inherits the
+#' root's namespace, so it touches every element, and each removal also walks
+#' the element's subtree: quadratic in document size (642 s for a 31.5 MB
+#' 990-PF return with 505,796 elements). Removing the declaration from the
+#' topmost elements that carry it clears the whole subtree in one pass; the
+#' loop repeats in case a nested element redeclares a different default.
+#'
+#' @param x An `xml2` document.
+#' @return `x`, invisibly (modified in place, like `xml2::xml_ns_strip()`).
+#' @export
+xml_ns_strip_fast <- function( x ){
+  # Every element with a default namespace in scope has a topmost such
+  # ancestor (or is one), so an empty `topmost` set means nothing is left.
+  # Selecting all in-scope elements instead took 230 s on the 31.5 MB return.
+  topmost  <- "//*[namespace::*[name()=''] and not(parent::*[namespace::*[name()='']])]"
+  for ( i in 1:50 ) {
+    nodes <- xml2::xml_find_all( x, topmost )
+    if ( !length( nodes ) ) break
+    xml2::xml_attr( nodes, "xmlns" ) <- NULL
+  }
+  invisible( x )
+}
+
+#' Xpaths of every element, in document order
+#'
+#' The same result as `xml2::xml_path(xml2::xml_find_all(doc, "//*"))`, in
+#' linear time. libxml2 builds each path by scanning the element's siblings,
+#' which is quadratic when one parent has many children (a 990-PF grant list
+#' with tens of thousands of entries took 4-7 minutes; returns of 250+ MB
+#' would take hours). Here each parent's children are named once: an element
+#' gets "[k]" only when a sibling has the same name, as libxml2 does.
+#'
+#' Documents with elements still in a namespace after `xml_ns_strip()` (see
+#' EF2-11) fall back to `xml2::xml_path()`, which writes the prefixes.
+#'
+#' @param doc An `xml2` document (namespaces stripped).
+#' @return Character vector of xpaths, one per element, in document order.
+#' @export
+get_xml_paths <- function( doc ){
+  # Only elements in a namespace change the path; IRS returns keep an xsi:
+  # declaration that is used by an attribute alone, which does not.
+  if ( xml2::xml_find_lgl( doc, "boolean(//*[namespace-uri() != ''])" ) ) {
+    return( xml2::xml_path( xml2::xml_find_all( doc, "//*" ) ) )
+  }
+  nodes <- xml2::xml_find_all( doc, "//*" )          # document order
+  n <- length( nodes )
+  if ( !n ) return( character() )
+  nm    <- xml2::xml_name( nodes )
+  depth <- as.integer( xml2::xml_find_num( nodes, "count(ancestor::*)" ) )
+
+  # parent = the closest preceding element one level up (document order)
+  parent <- integer( n )
+  for ( d in seq_len( max(depth) ) ) {
+    here <- which( depth == d )
+    up   <- which( depth == d - 1L )
+    parent[here] <- up[ findInterval( here, up ) ]
+  }
+
+  # "[k]" only when another child of the same parent has the same name
+  k   <- data.table::rowid( parent, nm )
+  key <- paste( parent, nm, sep = "\r" )
+  dup <- key %in% key[ duplicated(key) ]
+  seg <- ifelse( dup, paste0( nm, "[", k, "]" ), nm )
+
+  path <- character( n )
+  path[depth == 0L] <- paste0( "/", seg[depth == 0L] )
+  for ( d in seq_len( max(depth) ) ) {
+    here <- which( depth == d )
+    path[here] <- paste0( path[ parent[here] ], "/", seg[here] )
+  }
+  path
 }
 
 #' Compute the TABLE_HEADER from an xpath

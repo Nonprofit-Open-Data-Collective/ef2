@@ -48,10 +48,8 @@ flatten_xml <- function( doc, url, ccf=NULL ){
     names(ccf) <- toupper(names(ccf))
   }
 
-  xx <- 
-    doc %>% 
-    xml2::xml_find_all("//*") %>% 
-    xml2::xml_path()
+  # same as xml2::xml_path( xml2::xml_find_all(doc, "//*") ), in linear time
+  xx <- get_xml_paths( doc )
 
   order <- seq_along(xx)
   type  <- get_type(xx)
@@ -136,7 +134,7 @@ get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max 
     return(RES)
   }
 
-  xml2::xml_ns_strip(doc)
+  xml_ns_strip_fast(doc)
   KEYS       <- get_keys(doc, url) |> as.data.frame()
   FLATXML    <- flatten_xml(doc, url, ccf)
   ATTRIBUTES <- get_attr_df(doc, url)
