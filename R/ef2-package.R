@@ -16,5 +16,13 @@ utils::globalVariables(c(
   "ReturnTs",
   "xpath", "count_occurrences", "schema_versions",
   "attr_name", "attr_value", "n_records", "OBJECTID",
-  "table_name", "n_rows", "db", "worker_sum", "n_workers"
+  "table_name", "n_rows", "db", "worker_sum", "n_workers",
+  # 12_patch_index.R (data.table columns)
+  "XML_BATCH_ID", "INDEX_YEAR", "RETURN_TYPE", "OBJECT_ID", "ZIP_FILE",
+  "ObjectId", "URL", "ZipFile", "PATCH_BUILD", "PATCH_CREATED", "SOURCE",
+  ".N", ".SD", "..cols"
 ))
+
+# ef2 does not import data.table, so data.table's `[` must be told that this
+# namespace uses its syntax (`:=`, `.N`, `..cols`).
+.datatable.aware <- TRUE

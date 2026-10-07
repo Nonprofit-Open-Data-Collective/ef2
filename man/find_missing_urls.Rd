@@ -18,7 +18,14 @@ Set to NULL or "" to target the unversioned duckdb/ path.}
 Character vector of missing URLs.
 }
 \description{
-Compares the URLs stored in a DuckDB KEYS table (remote S3 database)
-against URLs listed in an index data frame, identifying which filings
-are missing from the database.
+Compares the filings stored in a DuckDB KEYS table (remote S3 database)
+against an index data frame, identifying which filings are missing from the
+database.
+}
+\details{
+Filings are matched on \code{OBJECTID}, not on URL. The same filing can
+be served from more than one place (GTDC \verb{XmlFiles/}, an NCCS patch folder
+under \verb{xml2/}), so matching on URL would add a filing a second time when its
+URL changes. If the index lists one filing under several URLs, the first is
+returned.
 }

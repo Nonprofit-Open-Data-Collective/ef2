@@ -1,9 +1,15 @@
 
 #' Identify missing URLs in a given tax year
 #'
-#' Compares the URLs stored in a DuckDB KEYS table (remote S3 database)
-#' against URLs listed in an index data frame, identifying which filings
-#' are missing from the database.
+#' Compares the filings stored in a DuckDB KEYS table (remote S3 database)
+#' against an index data frame, identifying which filings are missing from the
+#' database.
+#'
+#' @details Filings are matched on `OBJECTID`, not on URL. The same filing can
+#'  be served from more than one place (GTDC `XmlFiles/`, an NCCS patch folder
+#'  under `xml2/`), so matching on URL would add a filing a second time when its
+#'  URL changes. If the index lists one filing under several URLs, the first is
+#'  returned.
 #'
 #' @param year Integer tax year.
 #' @param index Data frame with columns TaxYear and URL.
@@ -27,9 +33,9 @@ find_missing_urls <- function(year, index, version = "efile_v2_1") {
   DBI::dbExecute(con, "SET s3_region='us-east-1';")
   DBI::dbExecute(con, base::sprintf("ATTACH '%s' AS src (READ_ONLY);", remote_db_url))
 
-  urls_db <- 
-    DBI::dbGetQuery(con, "SELECT DISTINCT url FROM src.KEYS;") |>
-    dplyr::pull(.data$URL)
+  oids_db <-
+    DBI::dbGetQuery(con, "SELECT DISTINCT OBJECTID FROM src.KEYS;") |>
+    dplyr::pull(.data$OBJECTID)
 
   DBI::dbDisconnect(con, shutdown = TRUE)
 
@@ -37,8 +43,10 @@ find_missing_urls <- function(year, index, version = "efile_v2_1") {
     dplyr::filter(.data$TaxYear == year) |>
     dplyr::pull(.data$URL) |>
     base::unique()
+  oids_index <- get_object_id2(urls_index)
+  keep <- !base::duplicated(oids_index) & !(oids_index %in% oids_db)
 
-  missing_urls <- base::setdiff(urls_index, urls_db)
+  missing_urls <- urls_index[keep]
   base::message(base::length(missing_urls), " missing URLs detected.")
   return(missing_urls)
 }
