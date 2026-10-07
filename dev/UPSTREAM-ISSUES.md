@@ -1684,8 +1684,39 @@ missing from the GTDC index.
 - *"The IRS index lags its zips."* No: `index_2026.csv` covers every zip on the
   IRS download page through 08A.
 
-**Not yet checked:** whether the published `efile_v2_3` archives contain the
-55,481 filings from 2025_09A/10A and the missing half of 2026_05A.
+**Effect on `efile_v2_3` (checked 2026-10-07):** `OBJECTID` was read from
+`KEYS` in all 16 published v2_3 databases over httpfs, 6,007,484 rows in
+total. In `KEYS` the value carries an `OID-` prefix, so strip it before joining
+to an index.
+
+Every v2_3 filing is in the GTDC full index. The databases contain exactly the
+990/990EZ filings that GT had indexed **up to its 2026-06-04 release**, which
+runs through IRS batch `2026_TEOS_XML_04A`, with `TaxYear` ≤ 2024. Up to that
+point, every indexed filing is present.
+
+Counting 990/990EZ filings in IRS batches that are missing from v2_3, by tax
+year:
+
+| TY | 2025_09A/10A | 2026_05A | 2026_06A/07A | 2026_08A | total | v2_3 rows | missing / v2_3 rows |
+|---|---|---|---|---|---|---|---|
+| 2022 | 570 | 0 | 0 | 4 | 576 | 555,251 | 0.1% |
+| 2023 | 4,411 | 1,142 | 1,021 | 550 | 7,125 | 561,156 | 1.3% |
+| 2024 | 40,582 | 46,515 | 14,334 | 11,282 | **112,715** | 456,170 | **24.7%** |
+
+The tax year is GT's `TaxYear` where the filing is indexed. Otherwise it is
+derived from the IRS `TAX_PERIOD`: the year if the period ends in month 12,
+else the year before.
+
+- **2025_09A/10A (45,567):** these are the index gap above. Every v2_3 rebuild
+  will skip them until GT indexes them or the build stops relying on GT's index.
+- **2026_05A (47,657):** 22,467 are now in the 2026-08-25 index. The rest wait
+  on GT extracting `05B`.
+- **2026_06A/07A (15,355):** these are in the 2026-08-25 index, which came out
+  after v2_3 was built. This is ordinary lag; `update_db()` picks them up.
+- **2026_08A (11,836):** this is lag at GT.
+
+TY2024 is still filling in, so part of its shortfall would close anyway. But
+the 2025_09A/10A part will not close on its own.
 
 **Cheap check to rerun:** compare object IDs in `find_current_index_full()`
 with the IRS index files, grouped by `XML_BATCH_ID`. Any batch whose count in
