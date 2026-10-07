@@ -164,11 +164,43 @@ build_database <- function(year, urls = NULL, group.size = 25,
   future::plan(future::sequential)
   main_db <- file.path(year_path, paste0("EFILE", year, ".duckdb"))
   if(is_update){main_db <- file.path(year_path, paste0("EFILE", year, "_UPDATE.duckdb"))}
+  # EF2-14: a resumed run hands out only the remaining batches, so workers it
+  # does not start keep shards from the earlier run that were never merged
+  # (TY2012 lost 7,100 filings this way). Merge every shard in the year folder,
+  # and skip filings the main database already holds, so a shard merged before
+  # (or merged in part) adds nothing twice. Update builds write a separate
+  # _UPDATE database and keep merging only this run's shards.
+  if (!is_update) worker_dbs <- collect_worker_dbs(year_path, year, worker_dbs)
   message("\n\U0001FA84 Merging ", length(worker_dbs), " worker databases into ", main_db)
-  merge_duckdbs(main_db, worker_dbs)
+  merge_duckdbs(main_db, worker_dbs, skip_existing = TRUE)
+
+  left <- length(list.files(file.path(year_path, "batches"), pattern = "\\.R$"))
+  if (left > 0) {
+    warning(left, " batch(es) for ", year, " were not processed (see worker_*.log); ",
+            "run build_database() again with urls = NULL to resume.", call. = FALSE)
+  }
 
   message("\n\U0001F389 All batches processed and merged for ", year)
   invisible(main_db)
+}
+
+
+#' Worker databases to merge for a year
+#'
+#' This run's worker databases plus every other `worker_NN_<year>.duckdb` in
+#' the year folder, so shards left by an interrupted run are merged too
+#' (EF2-14).
+#'
+#' @param year_path Year folder.
+#' @param year Year label used in the shard file names.
+#' @param worker_dbs Worker databases returned by this run.
+#' @return Character vector of paths, this run's first, without duplicates.
+#' @keywords internal
+collect_worker_dbs <- function(year_path, year, worker_dbs = character()) {
+  shards <- list.files(year_path, full.names = TRUE,
+                       pattern = sprintf("^worker_[0-9]+_%s[.]duckdb$", year))
+  norm <- function(x) normalizePath(x, winslash = "/", mustWork = FALSE)
+  unique(c(norm(worker_dbs), norm(sort(shards))))
 }
 
 
@@ -215,9 +247,14 @@ resume_build_database <- function(year, ccf = NULL, path = ".") {
 #' @param worker_dbs Character vector of worker database file paths.
 #' @param overwrite Logical; if TRUE, deletes existing main database before merging.
 #' @param cleanup Logical; if TRUE, deletes worker databases after merging.
+#' @param skip_existing Logical; if TRUE, rows of filings (by `OBJECTID`)
+#'   already in the main database's `KEYS` are not copied again, so merging a
+#'   shard twice, or one that was merged in part, adds no duplicates (EF2-14).
+#'   Default FALSE keeps the original append-everything behaviour.
 #' @return Invisibly returns the path to the merged database.
 #' @export
-merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALSE) {
+merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALSE,
+                          skip_existing = FALSE) {
   stopifnot(length(worker_dbs) > 0)
 
   message("\U0001F527 Merging ", length(worker_dbs), " worker databases...")
@@ -258,6 +295,13 @@ merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALS
 
     tbls_src <- DBI::dbListTables(con, alias)
 
+    # Filings already in main, taken once per shard before any of its tables
+    # are copied (copying KEYS first must not hide the shard's own FLATXML).
+    have_ids <- skip_existing && DBI::dbExistsTable(con, "KEYS")
+    if (have_ids) {
+      DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE merged_ids AS SELECT DISTINCT OBJECTID FROM main.KEYS WHERE OBJECTID IS NOT NULL;")
+    }
+
     for (tbl in merge_tables) {
       tbl_start <- Sys.time()
 
@@ -285,8 +329,11 @@ merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALS
           if (c %in% cols_src) sprintf('"%s"', c)
           else sprintf("NULL AS \"%s\"", c)
         ), collapse = ", "),
-        sprintf("FROM %s.%s;", alias, tbl)
+        sprintf("FROM %s.%s", alias, tbl)
       )
+      if (have_ids && "OBJECTID" %in% cols_src) {
+        select_src <- paste(select_src, "WHERE OBJECTID IS NULL OR OBJECTID NOT IN (SELECT OBJECTID FROM merged_ids)")
+      }
 
       # Copy rows in a transaction
       before_count <- DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM main.%s;", tbl))$n
