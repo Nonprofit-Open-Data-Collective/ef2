@@ -53,7 +53,7 @@ flatten_xml <- function( doc, url, ccf=NULL ){
 
   order <- seq_along(xx)
   type  <- get_type(xx)
-  xx2   <- gsub( "\\[[0-9]{1,5}\\]", "", xx )
+  xx2   <- gsub( "\\[[0-9]+\\]", "", xx )   # any width (EF2-16)
   xx2   <- gsub( "irs:", "", xx2 )
   xx2   <- gsub( "efile:", "", xx2 )
 

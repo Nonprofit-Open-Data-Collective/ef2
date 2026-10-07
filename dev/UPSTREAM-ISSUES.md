@@ -1485,6 +1485,49 @@ retries it returns `FAILED_URLS` in about 2 seconds.
 
 ---
 
+## EF2-16 — `XPATH2` keeps repeat indices of six digits or more
+
+Found 2026-10-06 during the 990-PF `efilepf_v2_3` build.
+
+`flatten_xml()` built `XPATH2` with `gsub( "\\[[0-9]{1,5}\\]", "", xx )`, which
+strips a repeat index only up to five digits. From the 100,000th repeat of a
+group onward the index survives: `.../GrantOrContributionPdDurYrGrp[100000]/...`
+matches no concordance xpath, so the row gets `VARIABLE_NAME` = the last element
+name and `RDB_TABLE = ''`, and it reaches no published table. Nothing errors.
+The filing's first 99,999 groups are published and the rest are silently dropped.
+
+Measured in the 990-PF DuckDBs
+(`EFILE_BUILD_SEPT_2026/990PF/<year>/EFILEPF<year>.duckdb`): in each of
+TY2020–2023 one filing (a foundation with ~360–400k
+`GrantOrContributionPdDurYrGrp` entries) leaves this many `FLATXML` rows with
+`contains(XPATH2, '[')`:
+
+| TY | rows |
+|---|---|
+| 2020 | 2.77M |
+| 2021 | 3.05M |
+| 2022 | 3.15M |
+| 2023 | 3.17M |
+
+The 990 `efile_v2_3` DuckDBs (`EFILE_BUILD_SEPT_2026/DUCKDB_V2_3/`) have none, so
+the 990 tables are unaffected. The defect is in the 990-PF archives only.
+
+**Workaround used:** the PF relabel step (`PF_V2_3_WORK/pf_stage.R`) strips every
+index before relabelling:
+`UPDATE FLATXML SET XPATH2 = regexp_replace(XPATH2, '\[[0-9]+\]', '', 'g')`.
+That is enough because labels are assigned by exact `XPATH2` match (see the
+efile_v2_3 note below).
+
+`get_table_id()` was not affected: it already matched `\\[[0-9]+\\]`. A 6-digit
+index gives `TID-100000`, one character wider than usual, which is harmless.
+
+**Fixed (branch `fix/ef2-16-xpath2-repeat-index`).** The regex is now
+`\\[[0-9]+\\]`. No other `{1,5}` pattern exists in `R/`. A test flattens a
+document with 100,001 repeats and checks that every `XPATH2` is index-free and
+every row gets its concordance label. It fails on the old regex.
+
+---
+
 ## efile_v2_3 — the v2_2 archives relabelled with concordance990 v2 (2026-10-06)
 
 A release record, not a defect. It is here because it resolves EF2-8, largely
