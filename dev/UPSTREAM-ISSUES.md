@@ -1641,7 +1641,7 @@ release.
 
 ---
 
-## EF2-17 — the GTDC index omits whole IRS batches
+## EF2-18 — the GTDC index omits whole IRS batches
 
 Found 2026-10-07 while checking how fresh the Giving Tuesday Data Commons (GTDC)
 data lake is.
