@@ -1564,6 +1564,78 @@ every row gets its concordance label. It fails on the old regex.
 
 ---
 
+## EF2-17 — the GTDC index omits whole IRS batches
+
+Found 2026-10-07 while checking how fresh the Giving Tuesday Data Commons (GTDC)
+data lake is.
+
+Builds and updates find filings through the GTDC index (`get_current_index_*()`,
+then `update_db()`). A filing missing from that index is missing from every
+database and table built from it. Nothing errors.
+
+**Measured:** the GTDC full index of 2026-08-25 (7,472,884 unique URLs) was
+compared, by object ID, with the IRS `index_<year>.csv` files for 2019–2026,
+grouped by the IRS `XML_BATCH_ID`. GT's raw XML folder was listed anonymously
+for prefixes 2024–2026 (`EfileData/XmlFiles/`, 1,766,361 files) to tell index
+gaps from missing files.
+
+| IRS batch | IRS filings | in GTDC index | XML file on GT | problem |
+|---|---|---|---|---|
+| `2025_TEOS_XML_09A` | 45,643 | 0 | 45,643 | not in the index |
+| `2025_TEOS_XML_10A` | 9,836 | 0 | 9,836 | not in the index |
+| `2026_TEOS_XML_05A` | 168,344 | 84,172 | 84,172 | half never unpacked |
+| `2026_TEOS_XML_08A` | 50,349 | 0 | 0 | not ingested yet |
+| `2024_TEOS_XML_07A` | 50,144 | 50,144 | 37,950 | 12,194 in the index have no XML file |
+| `2024_TEOS_XML_01A` | 17,246 | 17,246 | 16,458 | 788 in the index have no XML file |
+
+- **2025_09A and 2025_10A:** the IRS posted these on 2025-11-19. GT has the XML
+  files, and its index includes later batches (11A–D, 12A), but these two were
+  skipped. This is a gap in the index, not in the data.
+- **2026_05A:** the IRS split the batch into `05A.zip` and `05B.zip`. GT's index
+  holds the half whose object IDs start `202601`, `202611`, and part of
+  `202621`. `2026_TEOS_XML_05B.zip` is in `EfileData/XmlZips/` (uploaded
+  2026-08-25) but was never extracted.
+- **2026_08A:** the IRS posted it 2026-09-16, after GT's last index. This is
+  ordinary lag, not a defect; recheck after the next GTDC release.
+- **2024_07A and 2024_01A:** the index lists URLs whose XML files are missing
+  from the listing, so `get_flat_xml()` will fail on them. That puts them in
+  `FAILED_URLS`, but they are not recoverable from GT.
+
+The batches from 2019 to 2024 are otherwise complete: 11 filings in total are
+missing from the GTDC index.
+
+**Ruled out:**
+
+- *"The GTDC index stopped updating in Dec 2024."* That is false; it came from
+  a bad parse of the S3 listing. Objects written since 2025 carry
+  `<ChecksumAlgorithm>` and `<ChecksumType>` between `<ETag>` and `<Size>`, so a
+  regex expecting `<Size>` right after `<ETag>` drops every 2025–26 index. Parse
+  the listing with `xml2`, as `list_gt_indices()` does. GTDC indices come out
+  every 1–3 months (2026-03-20, 2026-06-04, 2026-08-25).
+- *"The full index lags the batch index."* That is also false. Both are written
+  the same day, and the 2026-08-25 batch index (154,656 filings: half of 05A,
+  plus 06A and 07A) is entirely inside the full index.
+- *"The IRS index lags its zips."* No: `index_2026.csv` covers every zip on the
+  IRS download page through 08A.
+
+**Not yet checked:** whether the published `efile_v2_3` archives contain the
+55,481 filings from 2025_09A/10A and the missing half of 2026_05A.
+
+**Cheap check to rerun:** compare object IDs in `find_current_index_full()`
+with the IRS index files, grouped by `XML_BATCH_ID`. Any batch whose count in
+the GTDC index is below its IRS count is a gap. Run it before an update.
+
+**Workaround:** use the IRS index as the list of filings, not the GTDC index.
+The XML files for the 2025_09A/10A filings are reachable at
+`https://gt990datalake-rawdata.s3.us-east-1.amazonaws.com/EfileData/XmlFiles/<OBJECT_ID>_public.xml`.
+The missing half of 2026_05A and the 2026_08A batch have to come from the IRS
+zips until GT ingests them.
+
+**Report upstream:** the 2025_09A/10A index gap and the unextracted `05B` zip
+belong to GTDC.
+
+---
+
 ## efile_v2_3 — the v2_2 archives relabelled with concordance990 v2 (2026-10-06)
 
 A release record, not a defect. It is here because it resolves EF2-8, largely
