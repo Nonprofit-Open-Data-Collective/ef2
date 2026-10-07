@@ -1551,16 +1551,46 @@ the 990 tables are unaffected. The defect is in the 990-PF archives only.
 **Workaround used:** the PF relabel step (`PF_V2_3_WORK/pf_stage.R`) strips every
 index before relabelling:
 `UPDATE FLATXML SET XPATH2 = regexp_replace(XPATH2, '\[[0-9]+\]', '', 'g')`.
-That is enough because labels are assigned by exact `XPATH2` match (see the
-efile_v2_3 note below).
+That is enough for the published tables because labels are assigned, and rows
+selected, by exact `XPATH2` match (see the efile_v2_3 note below).
 
-`get_table_id()` was not affected: it already matched `\\[[0-9]+\\]`. A 6-digit
-index gives `TID-100000`, one character wider than usual, which is harmless.
+`TABLE_HEADER` carries the same index, because `get_header()` is computed from the
+unstripped `XPATH2`. Nothing selects on `TABLE_HEADER`, so no table lost rows
+through it, but the column was wrong in every affected row.
+
+`get_table_id()` was not affected: it already matched `\\[[0-9]+\\]`, and
+`sprintf("%05.0f")` sets a minimum width, not a maximum. A 6-digit index gives
+`TID-100000`. The largest in the PF data is `TID-363675` (TY2023). `TABLE_ID`
+numbers repeats *within one filing*, not rows across a table, so it has no
+practical ceiling and does not need widening. The one caveat is that it sorts
+lexically: `TID-100000` sorts before `TID-20000`. Nothing in ef2 orders by it
+(it is only a pivot key), but a consumer sorting on it would mis-order this one
+filing's rows.
 
 **Fixed (branch `fix/ef2-16-xpath2-repeat-index`).** The regex is now
 `\\[[0-9]+\\]`. No other `{1,5}` pattern exists in `R/`. A test flattens a
 document with 100,001 repeats and checks that every `XPATH2` is index-free and
 every row gets its concordance label. It fails on the old regex.
+
+**Archives repaired in place (2026-10-07).** Same row counts as above in every
+case, one filing a year, every other year clean.
+
+- `990PF/<year>/EFILEPF<year>.duckdb`, TY2020–2023
+  (`990PF/scripts/07-fix-xpath2-index.R`, log `990PF/logs/fix-xpath2-index.tsv`).
+  `XPATH2` and `TABLE_HEADER` are stripped. `VARIABLE_NAME` and `RDB_TABLE` are
+  copied from the same xpath in the database's unaffected rows (repeats
+  1–99,999), i.e. what that build assigned. All 13–20 affected xpaths a year
+  had such a match. One transaction per year, committed only when no index is
+  left and no xpath carries two labels. Afterwards `XPATH2` matches the
+  `DUCKDB_PF_V2_3` copies row for row.
+- `DUCKDB_PF_V2_3/EFILEPF<year>.duckdb` (`PF_V2_3_WORK/pf_fix_table_header.R`).
+  `XPATH2` and the labels were already right; `TABLE_HEADER` is now stripped
+  too. `RELABEL_LOG` gains `table_header_index_fixed` (the row count, 0 in clean
+  years), so all 16 files changed.
+
+Neither set has been re-uploaded. Until it is, `s3://nccs-efile/duckpf/` (TY2020–2023)
+and `duckpf/efilepf_v2_3/` (all years) differ from the local files.
+The published PF CSV/Parquet tables are unaffected and need no rebuild.
 
 ---
 
