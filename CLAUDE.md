@@ -106,6 +106,38 @@ URLs. Run it against a local build instead: `xpath_reports/` holds the TY2009–
 reports from the September 2026 build (`C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026`,
 ~100 s for all years). Namespace-prefixed paths in them are EF2-11, not real xpaths.
 
+### 990-PF: `efilepf_v2_3`
+
+The 990-PF has its own archives and tables, TY2009–2024, published 2026-10-06:
+
+```
+https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckpf/efilepf_v2_3/EFILEPF<YEAR>.duckdb
+https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/public/efilepf_v2_3/
+```
+
+- **Archives** run 0.17 GB (2009) to 9.5 GB (2022). Same four tables as v2_3
+  (`ATTRIBUTES`, `FLATXML`, `KEYS`, `RELABEL_LOG`).
+- **Tables.** There are 84 tables a year as CSV + Parquet, 2,688 files. They
+  follow `concordance990::concordance("v2", form = "F990PF")` (commit `56cbffa`,
+  fixes 19–21, 2,517 xpaths).
+- **Table names.** The tables are `PF-P00` … `PF-P17`, the 40 `PF-P99-Txx`
+  attachment tables (`PF_AXnn_` variables), the shared `F9-P00-T00-HEADER` and
+  `F9-P02-T00-SIGNATURE`, and the public 990-PF Schedule B (`SB-*`). The PF
+  concordance has no `-T99-` tables; the P99 attachment tables play that role,
+  and all are built.
+- **Separate prefix.** The September 2026 parse stays at
+  `duckpf/EFILEPF<YEAR>.duckdb` with the build-time (990 v1) labels. Use the
+  `efilepf_v2_3` copies.
+
+It is built the same way as v2_3: relabel, then the ef2 builders. There is one
+difference. Variables with `multi_value = TRUE` (states filed, foundation
+managers, foreign countries) are joined into one cell with `;` in filing order
+instead of keeping only the string-max (EF2-13 fix 2). That is done in a view the
+builders read; ef2's builders are unchanged. The relabel also stripped 6+ digit
+indices from `XPATH2` (EF2-16). Scripts and logs are in
+`C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026/PF_V2_3_WORK/`, and the record is
+in `dev/UPSTREAM-ISSUES.md` under "efilepf_v2_3".
+
 ## Consumers
 
 `superstructure` (`../superstructure`) reads the `efile_v2_2` CSV tables and

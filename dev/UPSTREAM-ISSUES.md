@@ -1642,6 +1642,81 @@ recurs wherever the concordance does that.
 
 ---
 
+## efilepf_v2_3 — the 990-PF archives relabelled with concordance990 v2 (2026-10-06)
+
+A release record, not a defect. It is the 990-PF counterpart of efile_v2_3. Before
+it there were PF archives but no published PF tables.
+
+**What it is.** The 16 990-PF DuckDBs of the September 2026 parse
+(`duckpf/EFILEPF<year>.duckdb`; TY2023 includes the EF2-11 re-parse of its two
+prefixed filings). They were relabelled from
+`concordance990::concordance("v2", form = "F990PF")` (commit `56cbffa`, fixes
+19–21, 2,517 xpaths, 84 tables), then every table was built. That parse labelled
+FLATXML with ef2's default (990 v1) concordance, so before the relabel almost no
+PF xpath had a table.
+
+- Published to `duckpf/efilepf_v2_3/EFILEPF<year>.duckdb` and
+  `public/efilepf_v2_3/<TABLE>-<year>.CSV|.parquet`. These are new prefixes; the
+  `duckpf/EFILEPF<year>.duckdb` files are left as they were.
+- 84 tables × 16 years = 1,344 table-years, 2,688 files (37 GB). Every pair was
+  verified CSV ↔ Parquet by `verify_table_output()`. After upload the file count
+  on S3 matched the local count for every year.
+- Each archive's `RELABEL_LOG` records the release, the concordance commit,
+  `xpath2_index_fixed` (EF2-16) and how `multi_value` fields are published.
+- Before the relabel, all 16 archives were scanned for EF2-11: no prefixed
+  `XPATH` or attribute xpath and no blank `KEYS.RETURN_TYPE` in any year.
+- Scripts and logs are in `EFILE_BUILD_SEPT_2026/PF_V2_3_WORK/`: `pf_stage.R`
+  (copy, relabel, build, collisions, verify, move), `pf_run.sh` (restartable
+  driver), `pf_upload.sh`, `logs/BUILD_LOG.tsv`, `logs/collisions-<year>.csv`
+  and `logs/UPLOAD_LOG.tsv`. The builders are ef2's own, loaded from a frozen
+  snapshot of `main` at `fef0216` (`ef2-snapshot/`). Archives are in
+  `DUCKDB_PF_V2_3/` and tables in `EFILEPF_V2_3/`.
+
+**What differs from the v2_3 recipe.**
+
+- **List fields are joined, not truncated (EF2-13 fix 2).** The builders read an
+  in-memory view of `FLATXML` in which every `multi_value = TRUE` variable is
+  collapsed to one row per cell with `string_agg(VALUE, ';' ORDER BY ORDER)`.
+  Those variables are `PF_07_STATES_FILED`, `PF_07_FRGN_FIN_ACC_CNTR`,
+  `PF_15_MGR_CONTR`, `PF_15_MGR_SHAREHOLDER` and `F9_00_SPECIAL_COND_DESC`.
+  The archives still hold one row per value. ef2's builders were not changed;
+  the view is named `EFILE<year>.FLATXML` so they find it.
+- **EF2-16 workaround.** The relabel first strips every `[n]` from `XPATH2`:
+  2.77M, 3.05M, 3.15M and 3.17M rows in TY2020–2023, all in one filing a year.
+  So that filing's grants beyond the 99,999th reach `PF-P15-T01` (362,192 grant
+  rows from it in TY2022).
+- **A pivot-loss count per year (EF2-13 fix 1, detection only).** This is the
+  `collisions` stage. It counts populated cells beyond the first at each
+  `(OBJECTID[, TABLE_ID], VARIABLE_NAME)` on the same view the builders read.
+
+**What the PF tables still drop.** The count was run over all 16 years on the
+relabelled archives.
+
+| mechanism | cells dropped |
+|---|---|
+| attachment filed several times (`DepreciationSchedule[1..32]`, `OtherAssetsSchedule[n]`, …): every copy's row gets the same `TABLE_ID`, and **all copies were identical** | 215,375 |
+| differing values at one key (`PF-P99-T09-COMP` 24, `T00-AUXILLIARY` 13, `F9-P00-T00-HEADER` 6, `T39-LIAB-OTH` 1) | 44 keys in 31 filings |
+
+The first row is the Schedule K mechanism of EF2-13 (fix 3). Nothing is lost
+there today because the copies agree, but nothing guarantees they always will.
+`PF-P99-T11-DEPREC` accounts for 191,295 of the cells, in about 40 filings a year
+in TY2015–2023.
+
+**Concordance errors the build found.** These were fixed in concordance990
+before the final build:
+
+- `PF_13_UNDIST_INCOME_PYZ_TOT` pooled Part XIII lines 2b and 6b. It lost one of
+  two amounts in 1,422 of 2,345 TY2009 filings.
+- `PF-P15-T00-…-GRANT-APP` was a MANY table under a `T00` name, so
+  `build_table()` built it as one row per filing. It is now `PF-P15-T03-…`.
+- `AppliedToEsTaxAmt` (2013–2016) was pooled into the line-11 variable but is
+  line 6c. That collision cost 6–11k cells a year.
+
+A mapping error shows up first in this build's collision count. Run that stage
+after any concordance release.
+
+---
+
 ## Explicitly NOT ef2 issues
 
 Filed here only to stop them being re-filed as extraction bugs.
