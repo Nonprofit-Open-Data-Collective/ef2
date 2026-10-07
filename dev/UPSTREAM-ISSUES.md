@@ -1269,6 +1269,28 @@ main database, and stops if a shard is partly merged.
 only this run's, skipping `OBJECTID`s already in the main database. A
 post-merge check that `KEYS` matches the build list would catch any recurrence.
 
+**The same mechanism also duplicates filings.** Shards are never deleted, so a
+second run into a year whose merge completed reopens `worker_01`, appends the
+new filings, and merges the whole shard again, earlier filings included.
+
+**Fixed (branch `perf-get-type`).**
+- `build_database()` merges every `worker_NN_<year>.duckdb` in the year folder
+  (`collect_worker_dbs()`), not only this run's. Update builds
+  (`is_update = TRUE`) write a separate `_UPDATE` database and still merge only
+  their own shards.
+- `merge_duckdbs()` gains `skip_existing`. When TRUE, filings whose `OBJECTID`
+  is already in the main `KEYS` are not copied again, so a shard can be merged
+  twice, or after a partial merge, without duplicates. `build_database()` uses
+  TRUE; the default stays FALSE, the original behaviour.
+- `build_database()` warns if batch files remain unprocessed after the merge.
+
+Reproduced with 7 real TY2009 990-PF filings and 3 workers (`group.size = 1`):
+
+| Scenario | Before | After |
+|---|---|---|
+| Run 1 builds 6 filings, the merged DB is lost (crash before the merge), run 2 adds 1 filing | 3 of 7 filings | 7 of 7 |
+| Run 1 completes and its merged DB is kept, run 2 adds 1 filing | 9 `KEYS` rows for 7 filings | 7 rows |
+
 ---
 
 ## EF2-15 — `get_flat_xml()` downloads with no timeout
