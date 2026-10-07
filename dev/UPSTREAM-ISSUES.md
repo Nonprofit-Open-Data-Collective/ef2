@@ -149,6 +149,14 @@ Four rows out of 14.8M. Recorded for the pattern, not the magnitude; left
 unhandled deliberately, since a local guard here would hide a key-column defect
 that should be impossible.
 
+> **Resolved in efile_v2_3 (2026-10-06): it was EF2-11.** In the published v2_2
+> `F9-P07-T01-COMPENSATION-2024` table, the rows with blank `ORG_EIN` belong to
+> two filings, `OID-202543469349300234` (3 rows) and `OID-202542809349302034`
+> (1 row). Both were among the TY2024 filings re-parsed for EF2-11, and in v2_3
+> they carry `ORG_EIN`, `TAX_YEAR` and `RETURN_TYPE = 990`. TY2022 and TY2023 of
+> that table have no blank-`ORG_EIN` rows in v2_2. v2_2 is unchanged and still
+> has these rows.
+
 ---
 
 ## EF2-3 — 136 concordance variables carry multiple location codes
@@ -1138,6 +1146,34 @@ October 2026) had 2 such filings, both TY2023; they were re-parsed with this
 code and the year re-uploaded. The 990 build databases still need their ~41
 filings re-parsed.
 
+### Repaired in efile_v2_3 (2026-10-06)
+
+The 990 filings were re-parsed in the **v2_3** archives only. The v2_2 archives
+and tables on S3 are unchanged and still carry this defect.
+
+`V2_3_WORK/v23_reparse_prefixed.R` picks every filing whose `KEYS` row is blank
+and whose stored xpaths carry an element prefix. It re-parses each one with
+`xml_prefix_strip()`, replaces its `FLATXML`, `ATTRIBUTES` and `KEYS` rows, and
+relabels them as the v2_3 relabel does. Each year's tables were then rebuilt,
+verified and diffed against the pre-repair tables (kept in `V2_3_WORK/repair_prev/`).
+
+| TY | 2017 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | total |
+|---|---|---|---|---|---|---|---|---|
+| filings re-parsed | 1 | 1 | 2 | 13 | 12 | 9 | 5 | **43** |
+| table rows gained | 32 | 27 | 61 | 398 | 326 | 261 | 77 | **1,182** |
+
+Every year: 137/137 CSV ↔ Parquet verified, no columns added, and no
+differences outside the re-parsed filings. The 43 are the 41 prefixed filings
+above, plus the two blank-`KEYS` TY2024 filings from EF2-2 (5 vs 3 in the table
+above). The selection is not limited to `irs:`, so the `/efile:` variant is
+presumably among them, but that has not been checked filing by filing.
+
+Afterwards, a read-only scan of all 16 v2_3 archives finds **zero** `KEYS` rows
+with NULL `RETURN_TYPE` or `ORG_EIN`, and **zero** filings with a prefixed root
+xpath. No v2_3 table, in any year, has a row with NULL `ORG_EIN` or `TAX_YEAR`.
+The seven repaired DBs on S3 match local by multipart ETag, and their tables
+match by size. The count sheet's rows for those years were updated to match.
+
 ---
 
 ## EF2-12 — real filing data sits in XML attributes and reaches no published table
@@ -1496,9 +1532,10 @@ resolves EF2-7, and changes the table dimensions that every item above measures.
 rebuilt, **T99 included** (v2_2 published 112 tables a year with no T99; v2_3
 publishes 137). The builders and `get_table_id()` are unchanged.
 
-v2_3 relabels the v2_2 archives and does not re-parse any XML. So anything fixed in
-the parser after the v2_2 build is **not** in v2_3. That includes the EF2-11 fix
-for `irs:`-prefixed returns, so those filings still lack keys in v2_3.
+v2_3 relabels the v2_2 archives and does not re-parse any XML. So a parser fix
+made after the v2_2 build reaches v2_3 only if it is applied to v2_3 explicitly.
+The EF2-11 fix was applied: its 43 filings were re-parsed into the v2_3 archives
+and those seven years re-published (see EF2-11). No other parser fix has been.
 
 - Before relabelling, the local archives were confirmed byte-identical to
   `duckdb/efile_v2_2/` by recomputing all 16 S3 multipart ETags (100 MiB parts).
