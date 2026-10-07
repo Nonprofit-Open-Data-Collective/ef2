@@ -1618,9 +1618,34 @@ order in which a filer listed its grants.
 
 **Every published table changes.** `TABLE_ID` is a column on every T01+ table,
 and row order changes on all of them. This lands in `efile_v2_3` and
-`efilepf_v2_3` before release, not in a new version. Rolling it out means
-rewriting `FLATXML.TABLE_ID` in the archives (no re-parse needed), then
-rebuilding and re-uploading every table.
+`efilepf_v2_3` before release, not in a new version.
+
+**Rolled out locally (2026-10-07), not yet uploaded.** Scripts and logs are in
+`EFILE_BUILD_SEPT_2026/TID_WORK/`. The builds used a frozen snapshot of this
+branch (`ef2-snapshot/`, commit in `ef2_commit.txt`).
+- `tid_rewrite.R`: rewrites `FLATXML.TABLE_ID` in all 32 v2_3 DuckDBs (16 × 990,
+  16 × PF). It writes a compact copy and swaps it in, rather than updating in place.
+  Each copy is checked against its original: same tables and row counts, same
+  number of distinct IDs, the same sum of their numbers, and no malformed ID.
+  `RELABEL_LOG` gains `table_id_format`.
+- `tid_run.sh` drives the per-year steps:
+  - set the old tables aside in `prev/<set>/<year>/`;
+  - rebuild every table;
+  - verify CSV against Parquet;
+  - recount the PF collisions (identical to the original build in every year);
+  - diff each table against the one it replaces (`tid_diff.R`);
+  - move the new tables into place.
+- The diff compares row multisets with the old `TABLE_ID` rewritten, and counts
+  sort inversions in the new file. Result: 2,192 990 tables and 1,344 PF tables,
+  **0 differ**. Each table holds exactly its old rows and is sorted.
+- `PF_V2_3_WORK/pf_stage.R` hard-coded `'TID-00000'` in the view that joins
+  multi-value variables. It now uses `'TID-000-000-000'`. Both stage scripts load
+  the snapshot instead of the live checkout.
+- One PF file was open in Excel during set-aside and silently failed to move.
+  The driver now checks that set-aside left nothing behind.
+
+Still to do: upload both releases' DuckDBs and tables (and the EF2-16 raw PF
+repairs) and verify them against S3.
 
 **Consumers.** Anything that parses the number out of `TABLE_ID` must strip the
 dashes as well as the prefix. `superstructure`'s `norm_tid()` does
