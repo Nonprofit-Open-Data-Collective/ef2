@@ -171,7 +171,7 @@ xml_prefix_strip <- function( doc ){
 #' which is quadratic when one parent has many children (a 990-PF grant list
 #' with tens of thousands of entries took 4-7 minutes; returns of 250+ MB
 #' would take hours). Here each parent's children are named once: an element
-#' gets "[k]" only when a sibling has the same name, as libxml2 does.
+#' gets `[k]` only when a sibling has the same name, as libxml2 does.
 #'
 #' Documents with elements still in a namespace after `xml_ns_strip()` (see
 #' EF2-11) fall back to `xml2::xml_path()`, which writes the prefixes.

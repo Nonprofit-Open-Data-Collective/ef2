@@ -4,7 +4,14 @@
 \alias{get_flat_xml}
 \title{Download, parse, and flatten a single XML filing (with retries)}
 \usage{
-get_flat_xml(url, ccf = NULL, retries = 3, pause_min = 1, pause_max = 4)
+get_flat_xml(
+  url,
+  ccf = NULL,
+  retries = 3,
+  pause_min = 1,
+  pause_max = 4,
+  timeout = 120
+)
 }
 \arguments{
 \item{url}{Character XML URL.}
@@ -14,6 +21,9 @@ get_flat_xml(url, ccf = NULL, retries = 3, pause_min = 1, pause_max = 4)
 \item{retries}{Integer retries.}
 
 \item{pause_min, pause_max}{Random backoff bounds in seconds.}
+
+\item{timeout}{Seconds before a download attempt is abandoned and retried
+(EF2-15: without one, a stalled connection blocked a worker indefinitely).}
 }
 \value{
 List with FLATXML, ATTRIBUTES, and KEYS (see \code{\link[=get_keys]{get_keys()}}).
