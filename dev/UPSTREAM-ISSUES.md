@@ -1898,6 +1898,51 @@ after any concordance release.
 
 ---
 
+## EF2-19 — filings listed twice in the index are built twice
+
+Found 2026-10-07 while rebuilding efile_v2_3 tables (`EFILE_BUILD_SEPT_2026`).
+
+The Giving Tuesday index lists some returns twice. In 2025 GT re-indexed
+TY2019–2022 returns (`IndexedOn` 2025-09-27 and 2025-10-04, new zip files) and
+kept the original 2023-11-19 listings. Both listings have the same `ObjectId`,
+`URL` and `ReturnTs`; the recorded file hash and size differ in all but 89 cases,
+but only one file exists at the URL.
+
+The v2.2 990 builds took the build list straight from the index without
+deduplicating it, so each listing was downloaded and parsed and the filing was
+stored twice: two identical `KEYS` rows and exactly twice its `FLATXML` and
+`ATTRIBUTES` rows. Every published table joins `KEYS`, so those filings repeat
+in every table of those years.
+
+| TY | filings | stored twice |
+|---|---|---|
+| 2019 | 436,317 | 887 |
+| 2020 | 490,208 | 25,473 (5%: `F9-P01-T00-SUMMARY-2020` has 514,471 rows for 489,004 filings) |
+| 2021 | 539,217 | 34 |
+| 2022 | 555,197 | 54 |
+
+In every year the filings stored twice are exactly the ones listed twice; every
+other year has none. Every row of the two copies is identical.
+
+`prep_index()` already drops repeated URLs (`distinct(URL)`) and
+`find_missing_urls()` takes unique URLs, but `build_database(year, urls = ...)`
+and `split_urls()` batch whatever they are given. `merge_duckdbs(skip_existing =
+TRUE)` (EF2-14) keeps a filing out of a second shard, but not two copies inside
+one shard.
+
+**Fixed (branch `dedupe-guard`).**
+- `dedupe_urls()` drops repeated filings by ObjectId (also catching one return
+  under two URL forms) and reports how many; `build_database()` applies it to
+  `urls` before batching.
+- `check_unique_keys()` stops after the merge if `KEYS` holds any `OBJECTID`
+  more than once.
+
+The efile_v2_3 databases for TY2019–2022 were deduplicated in place on
+2026-10-07 (second copy removed, `DEDUP_LOG` table in each); their tables and
+the S3 copies still need a rebuild and upload.
+
+---
+
 ## Explicitly NOT ef2 issues
 
 Filed here only to stop them being re-filed as extraction bugs.
