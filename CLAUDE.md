@@ -43,25 +43,55 @@ yield the same `TABLE_ID` — see EF2-1. Treat that function as sensitive.
 
 ## Published archives
 
-DuckDB databases, TY2009–2024:
+DuckDB databases, TY2009–2024. **`efile_v2_3` is current**; `efile_v2_2` stays
+published, unchanged:
 
 ```
+https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v2_3/EFILE<YEAR>.duckdb
 https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v2_2/EFILE<YEAR>.duckdb
 ```
 
-Flat layout, no year subdirectory. Large — 2.8 GB (2009) to 18.3 GB (2024).
+Flat layout, no year subdirectory. Large — v2_3 runs 2.9 GB (2009) to 26.3 GB (2023).
+
+Tables, CSV + Parquet, flat as `<TABLE>-<YEAR>.CSV` / `.parquet`:
+
+```
+https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/public/efile_v2_3/
+```
+
+v2_3 differs from v2_2 in three ways:
+
+- **Labels.** `FLATXML.VARIABLE_NAME` / `RDB_TABLE` were rewritten from
+  concordance990 v2 (`concordance("v2", form = "F990")`, 1.99.1), so the tables
+  follow the v2 concordance. Some columns are renamed or moved, and a few
+  tables' row counts change.
+- **Tables.** v2_3 has 137 tables a year, including the 16 `-T99-` tables; v2_2
+  had 112 and no T99. The row counts are in
+  `public/efile_v2_3/COUNT-OF-ROWS-BY-TABLE-AND-FORMTYPE-EFILE_V2_3.CSV`.
+- **EF2-11.** The 43 `irs:`-prefixed filings were re-parsed, so no v2_3 `KEYS`
+  row is blank. v2_2 still has the defect.
+
+v2_3 was built by relabelling the v2_2 archives, not by re-parsing XML. That is
+valid because `flatten_xml()` assigns labels purely by exact `XPATH2` match. For
+a future concordance release, rerun that pipeline rather than a full rebuild:
+it takes seconds per year to relabel and about 6 minutes per year to rebuild
+the tables. Scripts, logs and the v2_2 → v2_3 diff (`dims_compare.csv`) are in
+`C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026/V2_3_WORK/`. The record is in
+`dev/UPSTREAM-ISSUES.md` under "efile_v2_3".
 
 **Query them remotely rather than downloading.** DuckDB reads these over HTTPS
 with range requests, pulling only the pages needed:
 
 ```sql
 LOAD httpfs;
-ATTACH 'https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v2_2/EFILE2009.duckdb'
+ATTACH 'https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v2_3/EFILE2009.duckdb'
   AS ef (READ_ONLY);
 ```
 
-A grouped scan of every Schedule R xpath in TY2009 returns in ~14 s this way.
-Tables in each database: `ATTRIBUTES`, `FLATXML`, `KEYS`.
+A grouped scan of every Schedule R xpath in TY2009 returns in ~14 s this way
+(measured on v2_2).
+Tables in each database: `ATTRIBUTES`, `FLATXML`, `KEYS`. v2_3 adds `RELABEL_LOG`,
+which records the concordance version used to relabel it.
 
 **On Windows**, the R `duckdb` package uses the `windows_amd64_mingw` build and
 in-process `INSTALL httpfs` fails, even though the extension URL serves fine over
@@ -81,6 +111,8 @@ reports from the September 2026 build (`C:/Users/jlecy/Documents/EFILE_BUILD_SEP
 `superstructure` (`../superstructure`) reads the `efile_v2_2` CSV tables and
 maintains its own notes in `dev/`. When changing table structure or column
 names, that repo's `inst/extdata/concordance.csv` and detectors are affected.
+Moving it to v2_3 needs such a pass, because v2_3 renames and moves columns
+(e.g. `SB_01_CONTRIBUTOR_TYPE` → `SB_01_CONTRIBUTOR_NUM`).
 
 ## Before changing table extraction
 
@@ -108,6 +140,10 @@ unresolved-link warnings for same-package topics; use `devtools::document()`.)
 ```r
 extract_csv_tables( wd = "...", years = 2009:2024, output = "both" )
 ```
+
+`get_table_names()` drops the `-T99-` tables by default (`exclude = "T99"`), which
+is why v2_2 has none. The v2_3 build passed every `rdb_table` in the concordance990
+v2 concordance instead.
 
 Both formats are written by `write_table_output()` from the **same** materialised
 `TEMP` table, so Parquet is never a re-parse of the CSV. That matters: FLATXML is
