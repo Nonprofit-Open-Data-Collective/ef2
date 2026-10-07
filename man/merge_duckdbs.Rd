@@ -4,7 +4,13 @@
 \alias{merge_duckdbs}
 \title{Merge multiple worker DuckDB databases into a main database}
 \usage{
-merge_duckdbs(main_db, worker_dbs, overwrite = FALSE, cleanup = FALSE)
+merge_duckdbs(
+  main_db,
+  worker_dbs,
+  overwrite = FALSE,
+  cleanup = FALSE,
+  skip_existing = FALSE
+)
 }
 \arguments{
 \item{main_db}{Path to the output DuckDB database (will be created if missing).}
@@ -14,6 +20,11 @@ merge_duckdbs(main_db, worker_dbs, overwrite = FALSE, cleanup = FALSE)
 \item{overwrite}{Logical; if TRUE, deletes existing main database before merging.}
 
 \item{cleanup}{Logical; if TRUE, deletes worker databases after merging.}
+
+\item{skip_existing}{Logical; if TRUE, rows of filings (by \code{OBJECTID})
+already in the main database's \code{KEYS} are not copied again, so merging a
+shard twice, or one that was merged in part, adds no duplicates (EF2-14).
+Default FALSE keeps the original append-everything behaviour.}
 }
 \value{
 Invisibly returns the path to the merged database.

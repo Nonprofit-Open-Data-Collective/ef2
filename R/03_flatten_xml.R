@@ -48,10 +48,8 @@ flatten_xml <- function( doc, url, ccf=NULL ){
     names(ccf) <- toupper(names(ccf))
   }
 
-  xx <- 
-    doc %>% 
-    xml2::xml_find_all("//*") %>% 
-    xml2::xml_path()
+  # same as xml2::xml_path( xml2::xml_find_all(doc, "//*") ), in linear time
+  xx <- get_xml_paths( doc )
 
   order <- seq_along(xx)
   type  <- get_type(xx)
@@ -107,15 +105,18 @@ flatten_xml <- function( doc, url, ccf=NULL ){
 #' @param ccf Optional concordance crosswalk.
 #' @param retries Integer retries.
 #' @param pause_min,pause_max Random backoff bounds in seconds.
+#' @param timeout Seconds before a download attempt is abandoned and retried
+#'   (EF2-15: without one, a stalled connection blocked a worker indefinitely).
 #' @return List with FLATXML, ATTRIBUTES, and KEYS (see [get_keys()]).
 #' @export
-get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max = 4) {
+get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max = 4,
+                         timeout = 120) {
   RES <- list(FAILED_URLS = data.frame(failed_urls = url, stringsAsFactors = FALSE))
   doc <- NULL
 
   for (attempt in seq_len(retries)) {
     try({
-      resp <- httr::GET(url)
+      resp <- httr::GET(url, httr::timeout(timeout))
       if (httr::status_code(resp) == 200) {
         raw_xml <- httr::content(resp, as = "text", encoding = "UTF-8")
         doc <- xml2::read_xml(raw_xml)
@@ -136,7 +137,8 @@ get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max 
     return(RES)
   }
 
-  xml2::xml_ns_strip(doc)
+  xml_ns_strip_fast(doc)
+  doc <- xml_prefix_strip(doc)   # EF2-11: <irs:Return> returns
   KEYS       <- get_keys(doc, url) |> as.data.frame()
   FLATXML    <- flatten_xml(doc, url, ccf)
   ATTRIBUTES <- get_attr_df(doc, url)
