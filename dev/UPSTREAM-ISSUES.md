@@ -1662,8 +1662,6 @@ gaps from missing files.
 | `2025_TEOS_XML_10A` | 9,836 | 0 | 9,836 | not in the index |
 | `2026_TEOS_XML_05A` | 168,344 | 84,172 | 84,172 | half never unpacked |
 | `2026_TEOS_XML_08A` | 50,349 | 0 | 0 | not ingested yet |
-| `2024_TEOS_XML_07A` | 50,144 | 50,144 | 37,950 | 12,194 in the index have no XML file |
-| `2024_TEOS_XML_01A` | 17,246 | 17,246 | 16,458 | 788 in the index have no XML file |
 
 - **2025_09A and 2025_10A:** the IRS posted these on 2025-11-19. GT has the XML
   files, and its index includes later batches (11A–D, 12A), but these two were
@@ -1674,9 +1672,12 @@ gaps from missing files.
   2026-08-25) but was never extracted.
 - **2026_08A:** the IRS posted it 2026-09-16, after GT's last index. This is
   ordinary lag, not a defect; recheck after the next GTDC release.
-- **2024_07A and 2024_01A:** the index lists URLs whose XML files are missing
-  from the listing, so `get_flat_xml()` will fail on them. That puts them in
-  `FAILED_URLS`, but they are not recoverable from GT.
+- **Not a gap: 2024_07A and 2024_01A.** An earlier draft listed 12,194 and 788
+  filings in these batches as indexed but missing their XML files. They are
+  present. Their object IDs start `2022` or `2023`, and the folder listing only
+  covered prefixes 2024–2026. A sample of 10 all return HTTP 206. When checking
+  XML presence by listing, list every prefix a batch's object IDs use, not
+  just the batch's year.
 
 The batches from 2019 to 2024 are otherwise complete: 11 filings in total are
 missing from the GTDC index.
