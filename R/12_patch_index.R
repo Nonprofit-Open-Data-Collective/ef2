@@ -171,13 +171,29 @@ fetch_irs_xml <- function( miss, dest, zips = NULL, zip_dir = tempdir(), keep_zi
              if ( nrow(no_batch) > 5 ) ", ..." )
   }
 
-  wanted <- paste0( miss[ ! is.na(XML_BATCH_ID) ]$OBJECT_ID, "_public.xml" )
+  stem   <- function(x) toupper( substr( x, 1, 16 ) )
+  rows   <- miss[ ! is.na(XML_BATCH_ID) ]
+  wanted <- data.frame( FILE = paste0( rows$OBJECT_ID, "_public.xml" ),
+                        STEM = stem( rows$XML_BATCH_ID ), stringsAsFactors = FALSE )
   todo   <- match_batch_zips( unique( miss$XML_BATCH_ID ), zips )
-  found  <- list()
+
+  # The manifest records which zip each extracted file came from, so a
+  # restarted run keeps the files an earlier run extracted.
+  manifest_file <- file.path( dest, "FETCH-MANIFEST.csv" )
+  manifest <- if ( file.exists(manifest_file) ) {
+    utils::read.csv( manifest_file, colClasses = "character" )
+  } else {
+    data.frame( FILE = character(0), ZIP_FILE = character(0) )
+  }
+  manifest <- manifest[ manifest$FILE %in% list.files(dest), , drop = FALSE ]
+  found <- list( manifest )
 
   for ( i in seq_len( nrow(todo) ) ) {
-    need <- setdiff( wanted, list.files(dest) )
-    if ( length(need) == 0 ) { break }
+    # Search each zip only for its own batch's files: a long pattern list makes
+    # stream_unzip() scale with (entries x patterns).
+    done <- unlist( lapply( found, `[[`, "FILE" ) )
+    need <- setdiff( wanted$FILE[ wanted$STEM == stem( todo$zip[i] ) ], done )
+    if ( length(need) == 0 ) { next }
     zf <- file.path( zip_dir, paste0( todo$zip[i], ".zip" ) )
     if ( ! file.exists(zf) ) {
       message( "Downloading ", todo$url[i] )
@@ -195,16 +211,20 @@ fetch_irs_xml <- function( miss, dest, zips = NULL, zip_dir = tempdir(), keep_zi
       msg <- paste( length(hit), "files extracted (streamed: damaged zip index)" )
     }
     if ( length(hit) > 0 ) {
-      found[[ todo$zip[i] ]] <- data.frame( FILE = basename(hit), ZIP_FILE = todo$zip[i],
-                                            stringsAsFactors = FALSE )
+      new <- data.frame( FILE = basename(hit), ZIP_FILE = todo$zip[i], stringsAsFactors = FALSE )
+      found[[ todo$zip[i] ]] <- new
+      utils::write.table( new, manifest_file, sep = ",", row.names = FALSE,
+                          col.names = ! file.exists(manifest_file),
+                          append = file.exists(manifest_file) )
     }
     message( todo$zip[i], ": ", msg )
     if ( ! keep_zips ) { unlink(zf) }
   }
 
-  got <- do.call( rbind, c( found, list( data.frame( FILE = character(0), ZIP_FILE = character(0) ) ) ) )
+  got <- do.call( rbind, found )
+  got <- got[ got$FILE %in% wanted$FILE & ! duplicated(got$FILE), , drop = FALSE ]
   got$OBJECT_ID <- sub( "_public\\.xml$", "", got$FILE )
-  left <- setdiff( wanted, list.files(dest) )
+  left <- setdiff( wanted$FILE, got$FILE )
   if ( length(left) > 0 ) {
     message( length(left), " wanted files were not found in any matching zip." )
   }

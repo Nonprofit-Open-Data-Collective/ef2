@@ -59,3 +59,25 @@ test_that("read_return_headers() reads TaxYr, falling back to the period start",
   expect_equal(h$FormType, c("990EZ", "990EZ"))
   expect_equal(h$ReturnVersion, c("2024v5.0", "2024v5.0"))
 })
+
+test_that("fetch_irs_xml() takes each batch from its own zips and resumes from its manifest", {
+  root <- tempfile("fetch"); dir.create(root); on.exit(unlink(root, recursive = TRUE))
+  src <- file.path(root, "src", "2026_TEOS_XML_05B"); dir.create(src, recursive = TRUE)
+  for (id in c("111", "222", "333")) writeLines("<Return/>", file.path(src, paste0(id, "_public.xml")))
+  zdir <- file.path(root, "zips"); dir.create(zdir)
+  zip::zip(file.path(zdir, "2026_TEOS_XML_05B.zip"), files = "2026_TEOS_XML_05B",
+           root = file.path(root, "src"))
+  zips <- data.frame(year = 2026, zip = "2026_TEOS_XML_05B", url = "unused", stringsAsFactors = FALSE)
+  # 333 sits in the zip but belongs to another batch, so it must not be taken.
+  miss <- data.table::data.table(OBJECT_ID = c("111", "222", "333"),
+                                 XML_BATCH_ID = c("2026_TEOS_XML_05A", "2026_TEOS_XML_05A", "2026_TEOS_XML_06A"))
+  dest <- file.path(root, "dest")
+  got1 <- suppressMessages(fetch_irs_xml(miss, dest, zips = zips, zip_dir = zdir, keep_zips = TRUE))
+  expect_setequal(got1$OBJECT_ID, c("111", "222"))
+  expect_equal(unique(got1$ZIP_FILE), "2026_TEOS_XML_05B")
+  expect_false(file.exists(file.path(dest, "333_public.xml")))
+  # A restart extracts nothing new but still reports the earlier files.
+  got2 <- suppressMessages(fetch_irs_xml(miss, dest, zips = zips, zip_dir = zdir, keep_zips = TRUE))
+  expect_setequal(got2$OBJECT_ID, c("111", "222"))
+  expect_equal(unique(got2$ZIP_FILE), "2026_TEOS_XML_05B")
+})
