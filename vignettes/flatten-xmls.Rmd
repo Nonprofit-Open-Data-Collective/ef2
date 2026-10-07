@@ -178,31 +178,31 @@ flat |>
 
 ## Step 4 — What the table numbers mean
 
-`TABLE_ID` (e.g. `TID-00000`, `TID-00001`) is the key that separates
+`TABLE_ID` (e.g. `TID-000-000-000`, `TID-000-000-001`) is the key that separates
 **one-to-one** data from **one-to-many** data. It is derived by `get_table_id()`,
 which reads the *last positional index* `[N]` from the raw `XPATH`:
 
-- **`TID-00000` → one-to-one (1:1).** The node is not inside a repeating group, so
+- **`TID-000-000-000` → one-to-one (1:1).** The node is not inside a repeating group, so
   the filing has exactly one of it (organization name, total revenue, a Yes/No
-  checkbox). Every 1:1 field across every schedule shares `TID-00000`.
-- **`TID-00001`, `TID-00002`, … → one-to-many (1:M).** The node is the *Nth
+  checkbox). Every 1:1 field across every schedule shares `TID-000-000-000`.
+- **`TID-000-000-001`, `TID-000-000-002`, … → one-to-many (1:M).** The node is the *Nth
   instance* of a repeating group. All the fields of one grant (its EIN, amount,
   purpose) share the same `TABLE_ID`, which is exactly what lets us reassemble each
   grant as its own row later.
 
 
 ``` r
-# 1:1 fields all sit in TID-00000:
+# 1:1 fields all sit in TID-000-000-000:
 flat |>
-  filter(TABLE_ID == "TID-00000", TYPE == "terminal",
+  filter(TABLE_ID == "TID-000-000-000", TYPE == "terminal",
          RDB_TABLE == "F9-P01-T00-SUMMARY") |>
   select(VARIABLE_NAME, TABLE_ID, VALUE) |>
   head(4)
 #>                      VARIABLE_NAME  TABLE_ID
-#> 1       F9_01_ACT_GVRN_ACT_MISSION TID-00000
-#> 2     F9_01_ACT_GVRN_NUM_VOTE_MEMB TID-00000
-#> 3 F9_01_ACT_GVRN_NUM_VOTE_MEMB_IND TID-00000
-#> 4          F9_01_ACT_GVRN_EMPL_TOT TID-00000
+#> 1       F9_01_ACT_GVRN_ACT_MISSION TID-000-000-000
+#> 2     F9_01_ACT_GVRN_NUM_VOTE_MEMB TID-000-000-000
+#> 3 F9_01_ACT_GVRN_NUM_VOTE_MEMB_IND TID-000-000-000
+#> 4          F9_01_ACT_GVRN_EMPL_TOT TID-000-000-000
 #>                                                                                         VALUE
 #> 1 THE CF SUPPORTS CHARITABLE, LITERARY AND EDUCATIONAL PROGRAMS IN THE NORTHERN REGION OF VA.
 #> 2                                                                                          14
@@ -216,10 +216,10 @@ flat |>
   select(TABLE_ID, VARIABLE_NAME, VALUE) |>
   head(4)
 #>    TABLE_ID               VARIABLE_NAME VALUE
-#> 1 TID-00001 SI_02_GRANT_US_ORG_AMT_CASH 40250
-#> 2 TID-00002 SI_02_GRANT_US_ORG_AMT_CASH 37729
-#> 3 TID-00003 SI_02_GRANT_US_ORG_AMT_CASH 77417
-#> 4 TID-00004 SI_02_GRANT_US_ORG_AMT_CASH 63008
+#> 1 TID-000-000-001 SI_02_GRANT_US_ORG_AMT_CASH 40250
+#> 2 TID-000-000-002 SI_02_GRANT_US_ORG_AMT_CASH 37729
+#> 3 TID-000-000-003 SI_02_GRANT_US_ORG_AMT_CASH 77417
+#> 4 TID-000-000-004 SI_02_GRANT_US_ORG_AMT_CASH 63008
 ```
 
 ## Step 5 — Labeling XPaths with concordance variable names
@@ -343,7 +343,7 @@ str(get_keys(doc, url))
 - `TYPE` distinguishes structural **parent/root** nodes from data-bearing
   **terminal/leaf** nodes; only terminals are extracted.
 - `TABLE_HEADER` is a root grouping node with no data of its own.
-- `TABLE_ID` encodes repetition: `TID-00000` = one-to-one, `TID-0000N` = the Nth row
+- `TABLE_ID` encodes repetition: `TID-000-000-000` = one-to-one, `TID-000-000-00N` = the Nth row
   of a one-to-many group.
 - `XPATH2` (indices stripped) joins the concordance to attach `VARIABLE_NAME` /
   `RDB_TABLE`; unmapped paths keep their node name and are tracked for concordance

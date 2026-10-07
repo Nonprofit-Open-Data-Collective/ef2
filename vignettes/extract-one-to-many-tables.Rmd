@@ -48,20 +48,20 @@ grants_long |>
   select(TABLE_ID, VARIABLE_NAME, VALUE) |>
   head(10)
 #>     TABLE_ID                  VARIABLE_NAME                  VALUE
-#> 1  TID-00001     SI_02_GRANT_US_ORG_NAME_L1        100WOMEN STRONG
-#> 2  TID-00001     SI_02_GRANT_US_ORG_ADDR_L1 714 EAST MARKET STREET
-#> 3  TID-00001   SI_02_GRANT_US_ORG_ADDR_CITY               LEESBURG
-#> 4  TID-00001  SI_02_GRANT_US_ORG_ADDR_STATE                     VA
-#> 5  TID-00001    SI_02_GRANT_US_ORG_ADDR_ZIP                  20178
-#> 6  TID-00001         SI_02_GRANT_US_ORG_EIN              541950727
-#> 7  TID-00001 SI_02_GRANT_US_ORG_IRC_SECTION        INTERFUND GRANT
-#> 8  TID-00001    SI_02_GRANT_US_ORG_AMT_CASH                  40250
-#> 9  TID-00001  SI_02_GRANT_US_ORG_AMT_NONCSH                      0
-#> 10 TID-00001     SI_02_GRANT_US_ORG_PURPOSE         HUMAN SERVICES
+#> 1  TID-000-000-001     SI_02_GRANT_US_ORG_NAME_L1        100WOMEN STRONG
+#> 2  TID-000-000-001     SI_02_GRANT_US_ORG_ADDR_L1 714 EAST MARKET STREET
+#> 3  TID-000-000-001   SI_02_GRANT_US_ORG_ADDR_CITY               LEESBURG
+#> 4  TID-000-000-001  SI_02_GRANT_US_ORG_ADDR_STATE                     VA
+#> 5  TID-000-000-001    SI_02_GRANT_US_ORG_ADDR_ZIP                  20178
+#> 6  TID-000-000-001         SI_02_GRANT_US_ORG_EIN              541950727
+#> 7  TID-000-000-001 SI_02_GRANT_US_ORG_IRC_SECTION        INTERFUND GRANT
+#> 8  TID-000-000-001    SI_02_GRANT_US_ORG_AMT_CASH                  40250
+#> 9  TID-000-000-001  SI_02_GRANT_US_ORG_AMT_NONCSH                      0
+#> 10 TID-000-000-001     SI_02_GRANT_US_ORG_PURPOSE         HUMAN SERVICES
 ```
 
-Look at the `TABLE_ID` column: the first grant's fields are all `TID-00001`, the
-second grant's are all `TID-00002`, and so on. **That is the entire trick of 1:M
+Look at the `TABLE_ID` column: the first grant's fields are all `TID-000-000-001`, the
+second grant's are all `TID-000-000-002`, and so on. **That is the entire trick of 1:M
 extraction** — the positional index `[N]` from the XPath, captured as `TABLE_ID`,
 tells us which fields belong to the same entry.
 
@@ -85,11 +85,11 @@ grants_wide |>
 #> # A tibble: 5 × 3
 #>   TABLE_ID  SI_02_GRANT_US_ORG_EIN SI_02_GRANT_US_ORG_AMT_CASH
 #>   <chr>     <chr>                  <chr>                      
-#> 1 TID-00001 541950727              40250                      
-#> 2 TID-00002 811191778              37729                      
-#> 3 TID-00003 453081114              77417                      
-#> 4 TID-00004 271118675              63008                      
-#> 5 TID-00005 541515133              350000
+#> 1 TID-000-000-001 541950727              40250                      
+#> 2 TID-000-000-002 811191778              37729                      
+#> 3 TID-000-000-003 453081114              77417                      
+#> 4 TID-000-000-004 271118675              63008                      
+#> 5 TID-000-000-005 541515133              350000
 ```
 
 This mirrors `build_rdb_table()`, which does the same pivot against the DuckDB
@@ -169,7 +169,7 @@ grants_wide |>
 ## What you learned
 
 - A 1:M table is the `TYPE == "terminal"` rows for one `RDB_TABLE` spread across
-  many `TABLE_ID`s (`TID-00001`, `TID-00002`, …).
+  many `TABLE_ID`s (`TID-000-000-001`, `TID-000-000-002`, …).
 - Pivoting keyed on `OBJECTID` **and** `TABLE_ID` reassembles one row per entry —
   the core of `build_rdb_table()`.
 - Dropping `TABLE_ID` collapses the group into unusable list-columns.

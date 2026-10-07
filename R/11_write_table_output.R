@@ -29,8 +29,7 @@
 #'
 #' `normalize_empty = TRUE` collapses `''` to NULL in the Parquet output only,
 #' reproducing what every CSV reader already does, so the two published formats
-#' answer identically. The CSV output stays byte-identical to what the package
-#' writes today. Set `normalize_empty = FALSE` to keep the distinction, but only
+#' answer identically. The CSV cells are written as they are. Set `normalize_empty = FALSE` to keep the distinction, but only
 #' alongside a documented note that the two formats differ by design.
 #'
 #' @param db_tbl A lazy tibble / table reference to materialise.
@@ -42,10 +41,13 @@
 #'   the path the package has always used.
 #' @param normalize_empty Logical; collapse `''` to NULL in Parquet so it agrees
 #'   with the CSV on read-back. See Details.
-#' @param sort_key Column to sort by before writing Parquet, or NULL. Sorting
-#'   makes row-group min/max statistics selective and shrinks the file: TY2023
-#'   header went from 61.5 MB to 56.2 MB sorted on `ORG_EIN`. Every published
-#'   table carries the KEYS columns, so `ORG_EIN` is always present.
+#' @param sort_key Columns to sort both outputs by, in order, or NULL. Keys the
+#'   table lacks are skipped: `TABLE_ID` exists only on repeating-group tables.
+#'   The default keeps each filing's rows together and its repeating groups in
+#'   filing order, which `TABLE_ID`'s fixed width makes a plain text sort.
+#'   Sorting also makes Parquet row-group min/max statistics selective and
+#'   shrinks the file: TY2023 header went from 61.5 MB to 56.2 MB sorted on
+#'   `ORG_EIN`.
 #' @param compression Parquet codec. `"zstd"` gives 61.5 MB against snappy's
 #'   109.7 MB on the TY2023 header table.
 #' @param compression_level Integer zstd level.
@@ -59,7 +61,7 @@ write_table_output <- function( db_tbl, table_name, year, con,
                                 output            = c( "csv", "parquet", "both" ),
                                 dest              = "CSV/",
                                 normalize_empty   = TRUE,
-                                sort_key          = "ORG_EIN",
+                                sort_key          = c( "ORG_EIN", "OBJECTID", "TABLE_ID" ),
                                 compression       = "zstd",
                                 compression_level = 9L,
                                 row_group_size    = 50000L,
@@ -75,18 +77,29 @@ write_table_output <- function( db_tbl, table_name, year, con,
   written <- character( 0 )
   stem    <- paste0( dest, table_name, "-", year )
 
+  schema <- DBI::dbGetQuery( con, paste0( "DESCRIBE ", temp_name ) )
+  flds   <- schema$column_name
+
+  # One ORDER BY for both formats, so the CSV and Parquet list rows identically.
+  order_by <- ""
+  keys     <- intersect( sort_key, flds )
+  if ( length( keys ) ) {
+    order_by <- paste0( " ORDER BY ", paste( dbq( keys ), collapse = ", " ) )
+  } else if ( length( sort_key ) ) {
+    warning( sprintf( "%s-%s: no sort_key column (%s) found; writing unsorted.",
+                      table_name, year, paste( sort_key, collapse = ", " ) ), call. = FALSE )
+  }
+
   if ( output %in% c( "csv", "both" ) ) {
     fpath <- paste0( stem, ".CSV" )
     DBI::dbExecute( con, paste0(
-      "COPY ", temp_name, " TO '", fpath, "' WITH ( HEADER, DELIMITER ',' );" ) )
+      "COPY ( SELECT * FROM ", temp_name, order_by, " ) TO '", fpath,
+      "' WITH ( HEADER, DELIMITER ',' );" ) )
     written <- c( written, fpath )
   }
 
   if ( output %in% c( "parquet", "both" ) ) {
     fpath <- paste0( stem, ".parquet" )
-
-    schema <- DBI::dbGetQuery( con, paste0( "DESCRIBE ", temp_name ) )
-    flds   <- schema$column_name
 
     if ( normalize_empty ) {
       # NULLIF only where the column is genuinely text. A non-VARCHAR column
@@ -99,14 +112,6 @@ write_table_output <- function( db_tbl, table_name, year, con,
       sel <- paste( sel, collapse = ", " )
     } else {
       sel <- "*"
-    }
-
-    order_by <- ""
-    if ( ! is.null( sort_key ) && sort_key %in% flds ) {
-      order_by <- paste0( " ORDER BY ", dbq( sort_key ) )
-    } else if ( ! is.null( sort_key ) ) {
-      warning( sprintf( "%s-%s: sort_key '%s' not found; writing unsorted.",
-                        table_name, year, sort_key ), call. = FALSE )
     }
 
     SQL <- sprintf(

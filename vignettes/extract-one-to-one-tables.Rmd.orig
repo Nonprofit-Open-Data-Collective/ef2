@@ -37,7 +37,7 @@ dim(flat)
 
 ## What makes a table "one-to-one"
 
-The signature of a 1:1 field is `TABLE_ID == "TID-00000"` — it does not live inside
+The signature of a 1:1 field is `TABLE_ID == "TID-000-000-000"` — it does not live inside
 any repeating group, so there is a single instance per filing (see the
 [flattening article](flatten-xmls.html) for how `TABLE_ID` is derived). We'll use
 the **Part I summary** table, `F9-P01-T00-SUMMARY`:
@@ -52,7 +52,7 @@ summary_long |>
 ```
 
 Two things to notice: we keep only `TYPE == "terminal"` (the leaf nodes that hold
-data), and every row is `TID-00000`. That uniform `TABLE_ID` is what guarantees the
+data), and every row is `TID-000-000-000`. That uniform `TABLE_ID` is what guarantees the
 table collapses to a single row.
 
 ## Pivot long → wide
@@ -109,7 +109,7 @@ and it belongs in a one-to-many table instead — the subject of the next articl
 ## What you learned
 
 - A 1:1 table is the set of `TYPE == "terminal"` rows for one `RDB_TABLE`, all with
-  `TABLE_ID == "TID-00000"`.
+  `TABLE_ID == "TID-000-000-000"`.
 - `pivot_wider(names_from = VARIABLE_NAME, values_from = VALUE)` collapses them to
   one row per filing — the core of `flatten_table()` / `build_table()`.
 - `add_keys()` prepends the filing's identifying metadata.

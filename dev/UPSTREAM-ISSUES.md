@@ -1558,14 +1558,8 @@ selected, by exact `XPATH2` match (see the efile_v2_3 note below).
 unstripped `XPATH2`. Nothing selects on `TABLE_HEADER`, so no table lost rows
 through it, but the column was wrong in every affected row.
 
-`get_table_id()` was not affected: it already matched `\\[[0-9]+\\]`, and
-`sprintf("%05.0f")` sets a minimum width, not a maximum. A 6-digit index gives
-`TID-100000`. The largest in the PF data is `TID-363675` (TY2023). `TABLE_ID`
-numbers repeats *within one filing*, not rows across a table, so it has no
-practical ceiling and does not need widening. The one caveat is that it sorts
-lexically: `TID-100000` sorts before `TID-20000`. Nothing in ef2 orders by it
-(it is only a pivot key), but a consumer sorting on it would mis-order this one
-filing's rows.
+`get_table_id()` read the 6-digit index correctly (it already matched
+`\\[[0-9]+\\]`), but the ID it built does not sort. See EF2-17.
 
 **Fixed (branch `fix/ef2-16-xpath2-repeat-index`).** The regex is now
 `\\[[0-9]+\\]`. No other `{1,5}` pattern exists in `R/`. A test flattens a
@@ -1591,6 +1585,48 @@ case, one filing a year, every other year clean.
 Neither set has been re-uploaded. Until it is, `s3://nccs-efile/duckpf/` (TY2020–2023)
 and `duckpf/efilepf_v2_3/` (all years) differ from the local files.
 The published PF CSV/Parquet tables are unaffected and need no rebuild.
+
+---
+
+## EF2-17 — `TABLE_ID` does not sort, and published rows have no defined order
+
+Found 2026-10-07 while repairing EF2-16.
+
+`get_table_id()` formatted the repeat number with `sprintf("%05.0f")`, which sets
+a minimum width, not a maximum. Repeat 100,000 became `TID-100000`, and as text
+that sorts before `TID-20000`. The largest in the PF data is `TID-363675`
+(TY2023), in one filing a year in TY2020–2023. `TABLE_ID` numbers repeats
+*within one filing*, so the value was never wrong. Only its order was.
+
+Separately, `write_table_output()` sorted only the Parquet output, and only by
+`ORG_EIN`. The CSV was unsorted. Within an EIN, neither format listed rows in any
+defined order. The order of repeating-group rows can carry meaning, e.g. the
+order in which a filer listed its grants.
+
+**Fixed (branch `table-id-sort`).**
+- `get_table_id()` writes nine digits in groups of three: `TID-000-000-001`,
+  `TID-000-363-675`. 1:1 fields are `TID-000-000-000`. Text order now equals
+  numeric order up to 999,999,999, and a larger index raises an error rather
+  than producing an ID that mis-sorts.
+- `write_table_output()` sorts **both** CSV and Parquet by
+  `ORG_EIN, OBJECTID, TABLE_ID`, skipping keys a table lacks (T00 tables have no
+  `TABLE_ID`). Filing date was considered and left out:
+  `RETURN_AMENDED_X` and `RETURN_PARTIAL_X` already distinguish amended returns,
+  and the timestamps carry mixed UTC offsets, so sorting them takes a cast.
+- Tests cover the format, its sort order, the overflow error, and the row order
+  of both outputs.
+
+**Every published table changes.** `TABLE_ID` is a column on every T01+ table,
+and row order changes on all of them. This lands in `efile_v2_3` and
+`efilepf_v2_3` before release, not in a new version. Rolling it out means
+rewriting `FLATXML.TABLE_ID` in the archives (no re-parse needed), then
+rebuilding and re-uploading every table.
+
+**Consumers.** Anything that parses the number out of `TABLE_ID` must strip the
+dashes as well as the prefix. `superstructure`'s `norm_tid()` does
+`as.integer(sub("^TID-", "", x))` inside `suppressWarnings()`, so it would return
+`NA` silently. It and `invert.R` (`sprintf("TID-%05d")`) need updating with the
+release.
 
 ---
 

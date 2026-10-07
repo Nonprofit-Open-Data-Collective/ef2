@@ -97,8 +97,13 @@ get_n <- function(x) {
 
 #' Make a TABLE_ID from a vector of xpaths
 #'
+#' The number is always nine digits in groups of three, so IDs sort as text in
+#' the same order as the repeats they number. Five digits used to be the
+#' minimum width, not a cap, and a filing with 100,000+ repeats produced
+#' `TID-100000`, which sorts before `TID-20000` (EF2-17).
+#'
 #' @param xpaths Character vector of xpaths.
-#' @return Character vector like "TID-00003".
+#' @return Character vector like "TID-000-000-003".
 #' @export
 get_table_id <- function( xpaths ) {
   # Vectorized get_n(): the last "[digits]" index in each xpath, "0" if none.
@@ -106,7 +111,9 @@ get_table_id <- function( xpaths ) {
   table.n <- rep( "0", length(xpaths) )
   has.n   <- grepl( "\\[[0-9]+\\]", xpaths )
   table.n[has.n] <- sub( "^.*\\[([0-9]+)\\].*$", "\\1", xpaths[has.n] )
-  table.n <- sprintf( "%05.0f", as.numeric(table.n) )
+  table.n <- sprintf( "%09.0f", as.numeric(table.n) )
+  if ( any( nchar(table.n) > 9 ) ) stop( "repeat index above 999,999,999; TABLE_ID would not sort" )
+  table.n <- sub( "^([0-9]{3})([0-9]{3})([0-9]{3})$", "\\1-\\2-\\3", table.n )
   table.n <- paste0( "TID-", table.n )
   return( table.n )  
 }
