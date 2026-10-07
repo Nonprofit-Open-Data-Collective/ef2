@@ -48,6 +48,8 @@ build_database <- function(year, urls = NULL, group.size = 25,
   # --- Use existing or new batch files ---
   if (!is.null(urls)) {
     message("\U0001F4E6 Creating new batch files for ", year)
+    # EF2-19: an index can list the same return twice; build each filing once
+    urls <- dedupe_urls(urls)
     batchfile <- split_urls(urls = urls, group.size = group.size, path = year_path)
   } else {
     message("\u21A9\uFE0F  Resuming existing batches for ", year)
@@ -173,6 +175,7 @@ build_database <- function(year, urls = NULL, group.size = 25,
   if (!is_update) worker_dbs <- collect_worker_dbs(year_path, year, worker_dbs)
   message("\n\U0001FA84 Merging ", length(worker_dbs), " worker databases into ", main_db)
   merge_duckdbs(main_db, worker_dbs, skip_existing = TRUE)
+  check_unique_keys(main_db)
 
   left <- length(list.files(file.path(year_path, "batches"), pattern = "\\.R$"))
   if (left > 0) {
@@ -182,6 +185,57 @@ build_database <- function(year, urls = NULL, group.size = 25,
 
   message("\n\U0001F389 All batches processed and merged for ", year)
   invisible(main_db)
+}
+
+
+#' Drop repeated filings from a build list
+#'
+#' An efiler index can list the same return more than once. The Giving Tuesday
+#' index re-indexed TY2019-2022 returns in 2025 and kept the original listings,
+#' so 26,448 ObjectIds appear twice with the same URL (EF2-19). Built from such a
+#' list, each copy is downloaded and parsed, and the filing is stored twice in
+#' KEYS, FLATXML and ATTRIBUTES, which duplicates its rows in every table.
+#'
+#' Filings are identified by ObjectId (the file name without `_public.xml`),
+#' which also catches one return listed under two URL forms (e.g. the GT data
+#' lake and the nccs-efile mirror). The first URL of each ObjectId is kept.
+#'
+#' @param urls Character vector of XML URLs.
+#' @return `urls` without repeated filings, in the original order.
+#' @export
+dedupe_urls <- function(urls) {
+  urls <- urls[!is.na(urls) & nzchar(urls)]
+  oid  <- sub("_public\\.xml$", "", basename(urls))
+  keep <- !duplicated(oid)
+  n <- sum(!keep)
+  if (n > 0) {
+    message(sprintf("⚠️  Dropped %d repeated filing(s) from the build list (same ObjectId listed more than once); %d filings remain.",
+                    n, sum(keep)))
+  }
+  urls[keep]
+}
+
+
+#' Check that a built database holds each filing once
+#'
+#' Stops if `KEYS` has more rows than distinct `OBJECTID`s: a filing stored
+#' twice is repeated in every table built from the database (EF2-19).
+#' [build_database()] calls it after the merge.
+#'
+#' @param db Path to a DuckDB database with a `KEYS` table.
+#' @return Invisibly, the number of filings (0 if there is no `KEYS` table).
+#' @export
+check_unique_keys <- function(db) {
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  if (!"KEYS" %in% DBI::dbListTables(con)) return(invisible(0L))
+  k <- DBI::dbGetQuery(con, "SELECT count(*) AS n_rows, count(DISTINCT OBJECTID) AS n_filings FROM KEYS")
+  if (k$n_rows > k$n_filings) {
+    stop(sprintf(paste0("%s: KEYS has %s rows for %s filings; %s filing(s) are stored more than once, ",
+                        "so their rows would repeat in every table (EF2-19). Remove the extra copies before building tables."),
+                 basename(db), k$n_rows, k$n_filings, k$n_rows - k$n_filings), call. = FALSE)
+  }
+  invisible(k$n_filings)
 }
 
 
