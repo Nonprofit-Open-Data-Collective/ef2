@@ -1073,6 +1073,16 @@ check its two OBJECTIDs against this list.
 from the xpath strings. Rebuilding these ~41 filings is enough; no full rebuild
 is needed.
 
+**Fixed (branch `perf-get-type`).** `get_flat_xml()` now calls
+`xml_prefix_strip()` right after the namespace strip. When any element is still
+in a namespace, the document is re-parsed with the prefix dropped from every
+element tag, so `KEYS`, `XPATH`, `XPATH2` and `ATTRIBUTES$xpath` all come out as
+for an unprefixed return. Every other return is passed through untouched
+(100 of 100 sampled 990-PF returns identical). The 990-PF build (TY2009–2024,
+October 2026) had 2 such filings, both TY2023; they were re-parsed with this
+code and the year re-uploaded. The 990 build databases still need their ~41
+filings re-parsed.
+
 ---
 
 ## EF2-12 — real filing data sits in XML attributes and reaches no published table
@@ -1231,6 +1241,54 @@ be made deliberately rather than inferred from whichever route is easiest.
 
 Supporting detail: `EFILE_BUILD_SEPT_2026/attr_analysis/attr_names_by_year.csv`
 and `attr_panel_coverage.csv`.
+
+---
+
+## EF2-14 — a resumed `build_database()` leaves earlier worker shards unmerged
+
+Found 2026-09-24 building the 990-PF databases (`EFILE_BUILD_SEPT_2026/990PF`).
+
+`build_database()` merges only the worker databases returned by **the current
+run**: `merge_duckdbs(main_db, worker_dbs)`, where `worker_dbs` comes from
+`future_map_chr()` over this run's worker assignments. When a build is
+interrupted and resumed (`urls = NULL`, or `resume_build_database()`), only the
+remaining batches are handed out. With fewer batches than before, some workers
+get no assignment, and the shards they wrote in the first run
+(`worker_11_2012.duckdb`, `worker_12_2012.duckdb`, ...) are never merged.
+
+Nothing errors and nothing is logged. In TY2012 the resumed build finished with
+**32,833 of 39,933 filings**; the missing 7,100 sat in `worker_11` and
+`worker_12`. It was caught only because the driver compared `KEYS` against the
+index.
+
+**Workaround used:** `990PF/scripts/merge-leftover-shards.R` appends every
+`worker_*.duckdb` in the year folder whose `OBJECTID`s are not already in the
+main database, and stops if a shard is partly merged.
+
+**Fix:** merge every `worker_*_<year>.duckdb` present in the year folder, not
+only this run's, skipping `OBJECTID`s already in the main database. A
+post-merge check that `KEYS` matches the build list would catch any recurrence.
+
+---
+
+## EF2-15 — `get_flat_xml()` downloads with no timeout
+
+Found 2026-09-24 building the 990-PF databases.
+
+`get_flat_xml()` calls `httr::GET(url)` with no timeout. A connection that
+stalls without closing blocks that worker indefinitely, and because the merge
+waits for every worker, it blocks the whole year. In TY2012 one worker sat
+45 minutes on a single request.
+
+The retry loop around the request already handles errors (three attempts, then
+the URL goes to `FAILED_URLS`); a stall just never becomes an error.
+
+**Workaround used:** the 990-PF build sets a global timeout in an R profile
+inherited by the workers:
+`setHook(packageEvent("httr", "onLoad"), function(...) httr::set_config(httr::timeout(120)))`.
+
+**Fix:** `httr::GET(url, httr::timeout(120))` in `get_flat_xml()`, so a stalled
+request is retried and then recorded in `FAILED_URLS` like any other failure.
 
 ---
 

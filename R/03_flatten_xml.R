@@ -135,6 +135,7 @@ get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max 
   }
 
   xml_ns_strip_fast(doc)
+  doc <- xml_prefix_strip(doc)   # EF2-11: <irs:Return> returns
   KEYS       <- get_keys(doc, url) |> as.data.frame()
   FLATXML    <- flatten_xml(doc, url, ccf)
   ATTRIBUTES <- get_attr_df(doc, url)

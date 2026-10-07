@@ -137,6 +137,33 @@ xml_ns_strip_fast <- function( x ){
   invisible( x )
 }
 
+#' Remove namespace prefixes from element names (EF2-11)
+#'
+#' A few returns write every element with a prefix (`<irs:Return>`,
+#' `<irs:ReturnHeader>`, ... and one `efile:` variant). Stripping the default
+#' namespace leaves the prefix, so `get_keys()` finds nothing (KEYS all NA),
+#' `XPATH` and `ATTRIBUTES$xpath` carry `irs:`, and only `XPATH2` is cleaned.
+#' This re-parses such a document with the prefix dropped from every element
+#' tag, then strips the default namespace again, so it is parsed exactly like
+#' an unprefixed return. Documents with no element in a namespace (all but
+#' ~0.001% of returns) are returned unchanged, without re-parsing.
+#'
+#' @param doc An `xml2` document, default namespace already stripped.
+#' @return The document to use: `doc` itself, or a re-parsed copy.
+#' @export
+xml_prefix_strip <- function( doc ){
+  if ( !xml2::xml_find_lgl( doc, "boolean(//*[namespace-uri() != ''])" ) ) {
+    return( doc )
+  }
+  txt <- as.character( doc )
+  # element tags only: "<irs:Name" and "</irs:Name"; attributes such as
+  # xsi:schemaLocation follow the name and are left alone
+  txt <- gsub( "<(/?)[A-Za-z_][A-Za-z0-9._-]*:", "<\\1", txt )
+  doc <- xml2::read_xml( txt )
+  xml_ns_strip_fast( doc )
+  doc
+}
+
 #' Xpaths of every element, in document order
 #'
 #' The same result as `xml2::xml_path(xml2::xml_find_all(doc, "//*"))`, in
