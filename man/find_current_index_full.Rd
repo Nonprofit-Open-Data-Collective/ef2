@@ -7,13 +7,19 @@
 find_current_index_full(days = 100)
 }
 \arguments{
-\item{days}{An integer specifying the number of past days to check.}
+\item{days}{An integer: days to probe in the fallback, and the age past
+which a stale index is reported.}
 }
 \value{
 A character string representing the URL of the most recent index file, or NA if none found.
 }
 \description{
-Identifies the most recent AWS index file (all years) within the given number of days.
+Identifies the most recent AWS index file (all years).
+}
+\details{
+Lists the bucket anonymously (\code{\link[=list_gt_indices]{list_gt_indices()}}); if that fails,
+falls back to probing the last \code{days} days by date. See
+\code{\link[=find_current_index]{find_current_index()}}.
 }
 \examples{
 find_current_index_full(100)
