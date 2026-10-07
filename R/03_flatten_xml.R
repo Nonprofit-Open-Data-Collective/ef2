@@ -105,15 +105,18 @@ flatten_xml <- function( doc, url, ccf=NULL ){
 #' @param ccf Optional concordance crosswalk.
 #' @param retries Integer retries.
 #' @param pause_min,pause_max Random backoff bounds in seconds.
+#' @param timeout Seconds before a download attempt is abandoned and retried
+#'   (EF2-15: without one, a stalled connection blocked a worker indefinitely).
 #' @return List with FLATXML, ATTRIBUTES, and KEYS (see [get_keys()]).
 #' @export
-get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max = 4) {
+get_flat_xml <- function(url, ccf = NULL, retries = 3, pause_min = 1, pause_max = 4,
+                         timeout = 120) {
   RES <- list(FAILED_URLS = data.frame(failed_urls = url, stringsAsFactors = FALSE))
   doc <- NULL
 
   for (attempt in seq_len(retries)) {
     try({
-      resp <- httr::GET(url)
+      resp <- httr::GET(url, httr::timeout(timeout))
       if (httr::status_code(resp) == 200) {
         raw_xml <- httr::content(resp, as = "text", encoding = "UTF-8")
         doc <- xml2::read_xml(raw_xml)

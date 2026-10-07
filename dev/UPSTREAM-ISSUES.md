@@ -1290,6 +1290,11 @@ inherited by the workers:
 **Fix:** `httr::GET(url, httr::timeout(120))` in `get_flat_xml()`, so a stalled
 request is retried and then recorded in `FAILED_URLS` like any other failure.
 
+**Fixed (branch `perf-get-type`).** `get_flat_xml()` takes `timeout = 120`
+(seconds per attempt) and passes it to `httr::GET()`. A test points it at a
+socket that accepts connections and never answers; with `timeout = 1` and two
+retries it returns `FAILED_URLS` in about 2 seconds.
+
 ---
 
 ## Explicitly NOT ef2 issues
