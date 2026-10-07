@@ -793,9 +793,26 @@ is the right one.
 > mapping that database was built with. Republishing must re-flatten, or
 > backfill `RDB_TABLE` for xpaths whose assignment changed since the build.
 
+### Status in efile_v2_3 (2026-10-06): largely resolved
+
+v2_3 took the backfill route for every xpath at once: `FLATXML` labels were
+rewritten from concordance990 v2 (see "efile_v2_3" below). Across TY2009–2024,
+populated terminal cells with no `RDB_TABLE` fall from **788,301 to 9,916**.
+No populated cell that had a table in v2_2 lost it: the one xpath v2 un-maps,
+`/Return/ReturnData/EmployeeCompensationExpln`, carries no value in any year.
+The remaining 9,916 are the concordance's to close, not this package's.
+
 ---
 
 ## EF2-8 — two dyadic rosters with EINs reach no published table
+
+> **Resolved in efile_v2_3 (2026-10-06).** concordance990 v2 maps both rosters,
+> and they publish as `F9-P00-T01-AFFILIATE-LISTING` and
+> `SC-P02-T01-AFFILIATED-GROUP` in all 16 years. Row counts match the direct
+> extraction below exactly: 3,903 / 2,321 in TY2023 and 1,070 / 652 in TY2013.
+> Distinct filings come out slightly higher (TY2023: 140 / 245 against the 138 /
+> 240 filers below), most likely because the table counts `OBJECTID`s and the
+> table below counted filers. That is not verified.
 
 `AffiliateListing` and `AffiliatedGroupSchedule` are **absent from the
 concordance entirely** — zero rows for either. Both sit at `/Return/ReturnData/`
@@ -934,6 +951,20 @@ has always read an empty file, so there is no analysis to revisit. The cost is
 and one phantom entry in the table inventory that anyone auditing coverage has
 to rule out by hand.
 
+### Still open in efile_v2_3, and four more like it
+
+`SA-P00-T00-HEADER` is still zero rows in all 16 v2_3 years. concordance990 v2
+also adds four Schedule B tables that are **zero rows in every year**:
+`SB-P00-T00-HEADER`, `SB-P02-T01-NONCASH-PROPERTY`,
+`SB-P03-T00-EXCLUSIVELY-RELIGIOUS` and `SB-P03-T01-EXCLUSIVELY-RELIGIOUS`.
+
+These have a different cause from `SA-P00`. Their xpaths are presumably real
+schema nodes. The likelier explanation is that Schedule B beyond the Part I
+contributor list does not appear in the public e-file release. That is not
+verified: check the xpaths against the XSDs before deciding whether the tables
+belong in the build list. The same rule applies as above: if they go, they go
+from the concordance, not as a filter on the build loop.
+
 ---
 
 ## EF2-10 — `extract_csv_tables()` crashes intermittently on a full-year build
@@ -1023,6 +1054,30 @@ TY2009–2024 rebuilt to CSV + Parquet, **1,792 pairs, all verified byte-equal b
 `verify_table_output()`, zero warnings across all 16 years**. Both crashes cost
 progress, not correctness. TY2012 and TY2016 — the two interrupted years — carry
 the same 112/112 verification as the other fourteen.
+
+### Two more occurrences, both SIGSEGV (efile_v2_3, 2026-10-06)
+
+The v2_3 build drove every year in batches of 20 tables in short-lived processes
+(`EFILE_BUILD_SEPT_2026/V2_3_WORK/v23_run.sh`). It never used
+`extract_csv_tables()`. Two batches died, and this time the exit status was
+captured:
+
+| year | batch | exit |
+|---|---|---|
+| TY2018 | 2 of 7 | **rc=139 = SIGSEGV** |
+| TY2016 | 4 of 7 | **rc=139 = SIGSEGV** |
+
+So the crash is a segfault, confirmed twice. It is still not tied to a year or a
+table. TY2016 failed again, but in a different phase than on 2026-09-21. It
+also hits short 20-table processes, which rules out session length a second time.
+The rate was 2 crashes in roughly 115 batch processes, and both resumed with
+no loss. All 2,192 v2_3 table-years verified.
+
+**Weak, unconfirmed:** on the same day, a short `Rscript -e '...'` that used only
+`data.table` (no `duckdb` loaded) also segfaulted once. The identical code,
+run twice from a file, completed cleanly. One unreproduced event does not move
+the fault out of the `duckdb` client. It is worth knowing, though, if the next
+occurrence also happens without `duckdb` loaded.
 
 ---
 
@@ -1244,6 +1299,117 @@ and `attr_panel_coverage.csv`.
 
 ---
 
+## EF2-13 — the pivot keeps one value per cell and silently discards the rest
+
+Found 2026-09-28 during the concordance990 v2 dry run on TY2023
+(`EFILE_BUILD_SEPT_2026/RELABEL_2023/`).
+
+Both builders widen with `tidyr::pivot_wider()` on a lazy table. dbplyr 2.5.2
+translates that into one aggregate per column:
+
+```sql
+MAX(CASE WHEN (VARIABLE_NAME = 'X') THEN "VALUE" WHEN NOT (VARIABLE_NAME = 'X') THEN '' END) AS X
+... GROUP BY OBJECTID              -- build_table(), T00
+... GROUP BY OBJECTID, TABLE_ID    -- build_rdb_table(), T01+
+```
+
+When more than one terminal cell lands on the same `(OBJECTID[, TABLE_ID],
+VARIABLE_NAME)`, the builder keeps the **lexicographically largest string** and
+drops the rest. It raises no warning or error, and the row count still looks
+right. For numbers, that means a string comparison: `"9"` beats `"10000"`.
+
+### Measured, TY2023
+
+Count of populated terminal cells discarded, i.e. cells beyond the first at each
+colliding key. T99 excluded.
+
+| mechanism | variables | lost under v1 | lost under v2 |
+|---|---|---|---|
+| list-valued field in a `T00` table | 6 | 220,242 | 220,242 |
+| repeated schedule copies share a `TABLE_ID` (Schedule K) | 64 | 77,974 | 67,903 |
+| two xpaths mapped to one variable in the same cell | 6 | 29,807 | 24,742 |
+| repeating group mapped to a `T00` table | 81 | 22,464 | 0 |
+| **total** | | **350,487** | **312,887** |
+
+**List-valued fields.** v2 flags these `multi_value = TRUE`, so the concordance
+already knows they are lists. ef2 ignores the flag. The three largest:
+
+- `F9_06_DISCLOSURE_STATES_FILED`: 152,988 values in 12,697 filings. For a
+  filing that lists 40 states, the table keeps one: whichever state code sorts last.
+- `SG_01_LIST_STATES_ORG_LIC`: 60,724 values.
+- `F9_05_FRGN_FIN_ACC_CNTR`: 5,664 values.
+
+**Schedule K copies.** A filing with more than four bond issues files several
+`IRS990ScheduleK[n]` copies (446 filings in TY2023). `get_table_id()` reads the
+*last* bracketed index, so `ScheduleK[1]/TaxExemptBondsProceedsGrp[2]` and
+`ScheduleK[2]/TaxExemptBondsProceedsGrp[2]` both become `TID-00002`, and four
+issues fold into one row. When the inner group has no index,
+`ScheduleK[5]/TaxExemptBondsProceedsGrp` picks up the schedule's index
+(`TID-00005`) instead. This affects all five `SK-P0x-T01` tables. Same family as
+EF2-1: `TABLE_ID` is not unique when the repeat sits above the group.
+
+**Two xpaths, one variable.** v2 fixed five of these (`SA_05_ASSET_MINIM_INDEPTED_CY`
+had absorbed the prior-year amount, `SH_05_HOSPITAL_NUM` the facility number, and
+`F9_06_DISCLOSURE_BOOK_ADDR_STATE` the country code). Two remain:
+
+- `SA_01_PCSTAT_SUPPORT_ORG_NUM` takes both `SupportedOrganizationsCnt` and
+  `SupportedOrganizationsTotalCnt`. They co-occur in 24,712 filings, so the
+  column holds the string-max of two counts. This one is a mapping question for
+  concordance990 first: if the two are different quantities, they need two variables.
+- **New in v2:** `F9_07_COMP_DTK_EXPL_NAME_PERS` / `_EXPL_TXT`. v2 maps
+  `EmployeeCompensationExpln/EmployeeCompExplanationGrp` onto the same variables
+  as `CompensationExplanation/CompensationExplanationGrp`. 17 filings carry both
+  lists, so their groups collide by index (15 values each). Because each column
+  is aggregated separately, one row can pair the **name from one list with the
+  explanation from the other**.
+
+**Repeating group in `T00`.** Under v1, Schedule H facility policies and the
+Schedule A hospital list sat in one-row-per-filing tables. That kept one facility
+per filing and cost 22,464 values. v2 moves both to per-facility tables
+(`SH-P05-T03`, `SA-P01-T02`), so this mechanism now measures zero in TY2023.
+Nothing stops it from recurring: any future mapping of a repeating xpath to a
+`T00` table is truncated the same way.
+
+### Fix
+
+1. **Detect it.** Count colliding keys before pivoting, and warn with the table,
+   the variable and the count. That is one `GROUP BY ... HAVING count(*) > 1`
+   on the same selection the pivot uses. The check query is in
+   `RELABEL_2023/work/check_pivot_collisions.R`.
+2. **List-valued fields:** aggregate with `string_agg(VALUE, ';' ORDER BY ORDER)`
+   where the concordance says `multi_value`, instead of `MAX`. This follows the
+   filing's order, so the result is deterministic.
+3. **Schedule K:** make `TABLE_ID` carry every bracketed index on the path
+   (`TID-00002-00001`), not only the last. This touches `get_table_id()`, so run
+   `audit_table_headers()` and a diff of all T01 tables afterwards.
+4. **Concordance-side:** report the two remaining shared-variable cases to
+   concordance990 (`SA_01_PCSTAT_SUPPORT_ORG_NUM`, the two compensation-explanation
+   lists).
+
+Detail: `RELABEL_2023/work/pivot_collisions.csv` has one row per table and
+variable, with v1 and v2 counts.
+
+### Status in efile_v2_3 (2026-10-06): unchanged, now published
+
+v2_3 is the v2 labelling measured above, with no change to the builders. The
+"under v2" column is therefore what the published v2_3 tables lose: none of fixes
+1–3 is in. Fix 4 still stands as well.
+
+**T99 tables, published for the first time in v2_3, are clean except one.** The
+same collision count, run over the 16 `-T99-` tables in TY2010, TY2016 and TY2023:
+
+| table | TY2010 | TY2016 | TY2023 |
+|---|---|---|---|
+| `SK-P06-T99-SUPPLEMENTAL-INFO` | 6 | 194 | 222 |
+| the other 15 T99 tables | 0 | 0 | 0 |
+
+The Schedule K mechanism is confirmed here, not inferred. In TY2023, 380 cells in
+31 filings collide, and **all 380** sit inside a multi-copy `IRS990ScheduleK[n]`.
+Fix 3 covers it. Per-table counts: `V2_3_WORK/t99_collisions.csv`; the check is
+`V2_3_WORK/t99_collisions.R`.
+
+---
+
 ## EF2-14 — a resumed `build_database()` leaves earlier worker shards unmerged
 
 Found 2026-09-24 building the 990-PF databases (`EFILE_BUILD_SEPT_2026/990PF`).
@@ -1316,6 +1482,83 @@ request is retried and then recorded in `FAILED_URLS` like any other failure.
 (seconds per attempt) and passes it to `httr::GET()`. A test points it at a
 socket that accepts connections and never answers; with `timeout = 1` and two
 retries it returns `FAILED_URLS` in about 2 seconds.
+
+---
+
+## efile_v2_3 — the v2_2 archives relabelled with concordance990 v2 (2026-10-06)
+
+A release record, not a defect. It is here because it resolves EF2-8, largely
+resolves EF2-7, and changes the table dimensions that every item above measures.
+
+**What it is.** The 16 v2_2 DuckDB archives, with `FLATXML.VARIABLE_NAME` and
+`RDB_TABLE` rewritten from `concordance990::concordance("v2", form = "F990")`
+(1.99.1, commit `3af11bb`, 7,016 xpaths, 137 tables). Then every table was
+rebuilt, **T99 included** (v2_2 published 112 tables a year with no T99; v2_3
+publishes 137). The builders and `get_table_id()` are unchanged.
+
+v2_3 relabels the v2_2 archives and does not re-parse any XML. So anything fixed in
+the parser after the v2_2 build is **not** in v2_3. That includes the EF2-11 fix
+for `irs:`-prefixed returns, so those filings still lack keys in v2_3.
+
+- Before relabelling, the local archives were confirmed byte-identical to
+  `duckdb/efile_v2_2/` by recomputing all 16 S3 multipart ETags (100 MiB parts).
+- The relabel reproduces `flatten_xml()` exactly. A mapped xpath gets its
+  concordance labels. An unmapped one gets the last path element and
+  `RDB_TABLE = ''`. A post-check found zero rows off-label in every year. It changed 281
+  distinct terminal xpaths and 86.2M cells. Each archive now holds a `RELABEL_LOG`
+  table with the provenance, so the published databases have **four** tables, not three.
+- 2,192 table-years, all 137/137 verified CSV ↔ Parquet by `verify_table_output()`.
+- Published to `duckdb/efile_v2_3/` and `public/efile_v2_3/`, with
+  `COUNT-OF-ROWS-BY-TABLE-AND-FORMTYPE-EFILE_V2_3.CSV`.
+- Scripts, logs and per-year label changes:
+  `EFILE_BUILD_SEPT_2026/V2_3_WORK/`. The table-by-year dimension diff is
+  `dims_compare.csv` there, and the per-table roll-up is `dims_change_by_table.csv`.
+
+This is the backfill route EF2-7 described, and it works only because labels
+are assigned by exact `XPATH2` match. It is cheap: the relabel takes 2–22 s per
+year and a full build about 6 min. Prefer it over re-flattening for a future
+concordance release.
+
+### Dimensions, v2_2 → v2_3
+
+Of the 1,792 table-years both releases share: 1,516 are identical. 15 differ
+only in column order (`F9-P06-T00-GOVERNANCE`). 129 have the same rows with
+columns added or removed. 132 changed rows. None were dropped. 400 table-years
+are new (25 tables × 16).
+
+| table | rows v2_2 → v2_3 (all years) | why |
+|---|---|---|
+| `F9-P07-T01-COMPENSATION-HCE-EZ` | 1,749,441 → 6,317 | "none" checkbox moved to `F9-P07-T00-DIR-TRUST-KEY` (below) |
+| `F9-P07-T02-CONTRACTORS` | 3,167,330 → 1,437,478 | same |
+| `F9-P07-T00-DIR-TRUST-KEY` | 5,522,668 → 5,715,727 | gains both flags, so EZ filers now get a row |
+| `SG-P02-T00-FUNDRAISING-EVENTS` | 126,996 → 995,790 | event totals moved here from `SG-P02-T01`. Still one row per filing |
+| `SA-P02-T00-SUPPORT_SCHEDULE_170` | +2,463 | `FactsAndCircumstancesTest` explanation now mapped |
+| `SC-P02-T00-LOBBY`, `SA-P01-T00`, `SH-P05-T01` | +354, +217, +12 | newly mapped variables |
+| `SG-P02-T01`, `F9-P07-T01-COMPENSATION`, `SD-P12-T00` | −148, −143, −18 | presumably rows whose only content moved to another table. Traced for 1 of the 143 (below); the rest not checked |
+
+Column-only changes worth knowing about: `SB_01_CONTRIBUTOR_TYPE` is renamed
+`SB_01_CONTRIBUTOR_NUM`. `F9_04_SCHED_B_NOT_REQ_X` splits out of
+`F9_04_SCHED_B_REQ_X`. Hospital name/address columns leave `SA-P01-T00` for
+`SA-P01-T02`. Facility-policy columns leave `SH-P05-T00` for `SH-P05-T03`.
+
+### Two v2_2 table defects this fixes
+
+**Rows that were only a "none" checkbox.** v1 mapped
+`IRS990EZ/PartVIOfCompOfHighestPaidEmpl` and `…/PartVIAHghstPaidCntrctProfSer`
+to variables in the repeating-group roster tables. Each such filing therefore
+produced a roster row holding nothing but the flag. In TY2023 that was 171,073 of
+`HCE-EZ`'s 171,819 rows and 170,364 of `CONTRACTORS`' 299,205. The remainders,
+746 and 128,841, are exactly the v2_3 row counts. Anyone counting compensated
+employees or contractors from v2_2 rows overcounted. The fix was in the
+concordance, not in ef2.
+
+**Key-only phantom rows.** An empty top-level element mapped to a roster table
+produces a row with keys and no data. The TY2009 case:
+`/Return/ReturnData/EmployeeCompensationExpln` (no value) gave
+`F9-P07-T01-COMPENSATION` one such row, the only TY2009 row of the −143 above.
+The other years' rows were not traced individually. The general
+pattern: a group node mapped to a repeating table, with nothing beneath it. It
+recurs wherever the concordance does that.
 
 ---
 
