@@ -95,12 +95,16 @@ A grouped scan of every Schedule R xpath in TY2009 returns in ~14 s this way
 Tables in each database: `ATTRIBUTES`, `FLATXML`, `KEYS`. v2_3 adds `RELABEL_LOG`,
 which records the concordance version used to relabel it.
 
-**On Windows**, the R `duckdb` package uses the `windows_amd64_mingw` build and
-in-process `INSTALL httpfs` fails, even though the extension URL serves fine over
-`curl`. Fetch and gunzip the extension manually, then connect with
-`config = list(allow_unsigned_extensions = "true")` and
-`LOAD '<path>/httpfs.duckdb_extension'`. Details in `dev/UPSTREAM-ISSUES.md`
-(EF2-5).
+**On Windows**, R `duckdb` 1.5.5 runs `INSTALL httpfs; LOAD httpfs;` in-process
+(verified 2026-10-07). Older builds could not download the extension and needed
+a manual fetch plus `allow_unsigned_extensions` (EF2-5). By default extensions
+land in a per-session temp directory, so run `INSTALL httpfs` in each session,
+or connect with `duckdb(shared_home = TRUE)` to keep it.
+
+`OBJECTID` in every ef2 table carries an `OID-` prefix, added by
+`get_object_id()` so it always stays text. IRS (`OBJECT_ID`) and GTDC
+(`ObjectId`) indices use the bare 18 digits, so add or strip the prefix when
+joining to them.
 
 Note `generate_xpath_report()` cannot reach these yet: it builds
 `base_path/<year>/EFILE<year>.duckdb` and gates on `file.exists()`, which rejects

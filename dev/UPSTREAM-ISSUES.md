@@ -244,6 +244,17 @@ gunzip the extension manually, then connect with
 `config = list(allow_unsigned_extensions = "true")` and
 `LOAD '<path>/httpfs.duckdb_extension'`.
 
+**Resolved by upgrading (verified 2026-10-07).** With R `duckdb` 1.5.5 on R 4.5.3
+(Windows), plain `INSTALL httpfs; LOAD httpfs;` works in-process. The 16 v2_3
+`KEYS` tables were read remotely this way, about 5 s per year. The workaround
+above is only needed on older `duckdb` builds.
+
+One catch remains. By default R `duckdb` keeps extensions in a per-session temp
+directory, so `INSTALL httpfs` has to run in every R session. A bare
+`LOAD httpfs` in a fresh session fails with "Extension ... not found". Use
+`dbConnect(duckdb(shared_home = TRUE))`, or create `~/.duckdb`, to keep the
+extension between sessions.
+
 ### Suggested change
 
 Give `generate_xpath_report()` a `db_path` argument that accepts a URL, skip the
@@ -1630,7 +1641,7 @@ release.
 
 ---
 
-## EF2-17 — the GTDC index omits whole IRS batches
+## EF2-18 — the GTDC index omits whole IRS batches
 
 Found 2026-10-07 while checking how fresh the Giving Tuesday Data Commons (GTDC)
 data lake is.
@@ -1651,8 +1662,6 @@ gaps from missing files.
 | `2025_TEOS_XML_10A` | 9,836 | 0 | 9,836 | not in the index |
 | `2026_TEOS_XML_05A` | 168,344 | 84,172 | 84,172 | half never unpacked |
 | `2026_TEOS_XML_08A` | 50,349 | 0 | 0 | not ingested yet |
-| `2024_TEOS_XML_07A` | 50,144 | 50,144 | 37,950 | 12,194 in the index have no XML file |
-| `2024_TEOS_XML_01A` | 17,246 | 17,246 | 16,458 | 788 in the index have no XML file |
 
 - **2025_09A and 2025_10A:** the IRS posted these on 2025-11-19. GT has the XML
   files, and its index includes later batches (11A–D, 12A), but these two were
@@ -1663,9 +1672,12 @@ gaps from missing files.
   2026-08-25) but was never extracted.
 - **2026_08A:** the IRS posted it 2026-09-16, after GT's last index. This is
   ordinary lag, not a defect; recheck after the next GTDC release.
-- **2024_07A and 2024_01A:** the index lists URLs whose XML files are missing
-  from the listing, so `get_flat_xml()` will fail on them. That puts them in
-  `FAILED_URLS`, but they are not recoverable from GT.
+- **Not a gap: 2024_07A and 2024_01A.** An earlier draft listed 12,194 and 788
+  filings in these batches as indexed but missing their XML files. They are
+  present. Their object IDs start `2022` or `2023`, and the folder listing only
+  covered prefixes 2024–2026. A sample of 10 all return HTTP 206. When checking
+  XML presence by listing, list every prefix a batch's object IDs use, not
+  just the batch's year.
 
 The batches from 2019 to 2024 are otherwise complete: 11 filings in total are
 missing from the GTDC index.
@@ -1684,8 +1696,39 @@ missing from the GTDC index.
 - *"The IRS index lags its zips."* No: `index_2026.csv` covers every zip on the
   IRS download page through 08A.
 
-**Not yet checked:** whether the published `efile_v2_3` archives contain the
-55,481 filings from 2025_09A/10A and the missing half of 2026_05A.
+**Effect on `efile_v2_3` (checked 2026-10-07):** `OBJECTID` was read from
+`KEYS` in all 16 published v2_3 databases over httpfs, 6,007,484 rows in
+total. ef2's `OBJECTID` carries an `OID-` prefix in every table, while the IRS
+and GTDC indices use the bare 18 digits, so strip the prefix for this join.
+
+Every v2_3 filing is in the GTDC full index. The databases contain exactly the
+990/990EZ filings that GT had indexed **up to its 2026-06-04 release**, which
+runs through IRS batch `2026_TEOS_XML_04A`, with `TaxYear` ≤ 2024. Up to that
+point, every indexed filing is present.
+
+Counting 990/990EZ filings in IRS batches that are missing from v2_3, by tax
+year:
+
+| TY | 2025_09A/10A | 2026_05A | 2026_06A/07A | 2026_08A | total | v2_3 rows | missing / v2_3 rows |
+|---|---|---|---|---|---|---|---|
+| 2022 | 570 | 0 | 0 | 4 | 576 | 555,251 | 0.1% |
+| 2023 | 4,411 | 1,142 | 1,021 | 550 | 7,125 | 561,156 | 1.3% |
+| 2024 | 40,582 | 46,515 | 14,334 | 11,282 | **112,715** | 456,170 | **24.7%** |
+
+The tax year is GT's `TaxYear` where the filing is indexed. Otherwise it is
+derived from the IRS `TAX_PERIOD`: the year if the period ends in month 12,
+else the year before.
+
+- **2025_09A/10A (45,567):** these are the index gap above. Every v2_3 rebuild
+  will skip them until GT indexes them or the build stops relying on GT's index.
+- **2026_05A (47,657):** 22,467 are now in the 2026-08-25 index. The rest wait
+  on GT extracting `05B`.
+- **2026_06A/07A (15,355):** these are in the 2026-08-25 index, which came out
+  after v2_3 was built. This is ordinary lag; `update_db()` picks them up.
+- **2026_08A (11,836):** this is lag at GT.
+
+TY2024 is still filling in, so part of its shortfall would close anyway. But
+the 2025_09A/10A part will not close on its own.
 
 **Cheap check to rerun:** compare object IDs in `find_current_index_full()`
 with the IRS index files, grouped by `XML_BATCH_ID`. Any batch whose count in
