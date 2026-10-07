@@ -36,50 +36,120 @@ url_is_valid <- function(url) {
   return(status == "200")
 }
 
+#' @title List Index Files in the GTDC S3 Bucket
+#' @description Lists every file under `Indices/990xmls/` in the Giving
+#'  Tuesday Data Commons bucket with a plain HTTPS request. No AWS account,
+#'  key, or CLI is needed: the bucket allows anonymous listing.
+#' @details Follows S3 continuation tokens, so the result is complete even
+#'  past 1,000 files. Returns `NULL` (rather than an error) if the listing is
+#'  refused or unreachable -- e.g. if the bucket stops allowing anonymous
+#'  listing -- so callers can fall back to probing URLs by date.
+#' @param timeout Seconds to wait for each listing request.
+#' @return A character vector of object keys (e.g.
+#'  `"Indices/990xmls/index_all_years_efiledata_xmls_created_on_2024-12-23.csv"`),
+#'  or `NULL` if the bucket could not be listed.
+#' @examples
+#' \dontrun{
+#' keys <- list_gt_indices()
+#' extract_filenames_full( keys )
+#' }
+#' @export
+list_gt_indices <- function( timeout = 30 ) {
+  base  <- "https://gt990datalake-rawdata.s3.us-east-1.amazonaws.com/"
+  keys  <- character(0)
+  token <- NULL
+  repeat {
+    query <- list( `list-type` = 2, prefix = "Indices/990xmls/",
+                   `continuation-token` = token )
+    resp <- tryCatch( httr::GET( base, query = query, httr::timeout( timeout ) ),
+                      error = function(e) NULL )
+    if ( is.null(resp) || httr::status_code(resp) != 200 ) { return(NULL) }
+    x <- xml2::read_xml( httr::content( resp, as = "text", encoding = "UTF-8" ) )
+    xml2::xml_ns_strip(x)
+    keys <- c( keys, xml2::xml_text( xml2::xml_find_all( x, "//Contents/Key" ) ) )
+    truncated <- xml2::xml_text( xml2::xml_find_first( x, "//IsTruncated" ) )
+    if ( !identical( truncated, "true" ) ) { break }
+    token <- xml2::xml_text( xml2::xml_find_first( x, "//NextContinuationToken" ) )
+  }
+  return(keys)
+}
+
+#' @title Find Most Recent GTDC Index of a Given Type
+#' @description Shared engine for [find_current_index_full()] and
+#'  [find_current_index_batch()].
+#' @details Lists the bucket with [list_gt_indices()] and takes the newest
+#'  matching CSV, however old it is. If the listing is unavailable, falls back
+#'  to probing one URL per day for the last `days` days. A message reports the
+#'  index date when it is older than `days`, because the GTDC indices are not
+#'  always refreshed (the newest was 2024-12-23 as of October 2026).
+#' @param type `"full"` (all years) or `"batch"` (latest only).
+#' @param days Days to probe in the fallback, and the age past which a stale
+#'  index is reported.
+#' @return The index URL, or `NA` if none was found.
+#' @keywords internal
+find_current_index <- function( type = c("full","batch"), days = 100 ) {
+  type <- match.arg(type)
+  base <- "https://gt990datalake-rawdata.s3.us-east-1.amazonaws.com/Indices/990xmls/"
+  stem <- if ( type == "full" ) "index_all_years_efiledata_xmls_created_on_" else
+                                "index_latest_only_efiledata_xmls_created_on_"
+  extract <- if ( type == "full" ) extract_filenames_full else extract_filenames_batch
+
+  fns  <- NA_character_
+  keys <- list_gt_indices()
+  if ( !is.null(keys) ) {
+    fns <- extract(keys)
+    fns <- fns[ !is.na(fns) ]
+  }
+
+  if ( length(fns) > 0 && !all( is.na(fns) ) ) {
+    fn  <- fns[ find_most_recent_date( extract_dates(fns) ) ]
+    url <- paste0( base, fn )
+  } else {
+    message( "Could not list the GTDC bucket; probing the last ", days, " days by date." )
+    urls <- paste0( base, stem, get_last_n_dates(days), ".csv" )
+    url  <- NA_character_
+    for ( u in urls ) {
+      if ( url_is_valid(u) ) { url <- u; break }
+    }
+    if ( is.na(url) ) { return(NA) }
+  }
+
+  age <- as.numeric( Sys.Date() - as.Date( extract_dates(url) ) )
+  if ( age > days ) {
+    message( "Most recent GTDC ", type, " index is dated ", extract_dates(url),
+             " (", age, " days old)." )
+  }
+  return(url)
+}
+
 #' @title Find Most Recent AWS Full Index
-#' @description Identifies the most recent AWS index file (all years) within the given number of days.
-#' @param days An integer specifying the number of past days to check.
+#' @description Identifies the most recent AWS index file (all years).
+#' @details Lists the bucket anonymously ([list_gt_indices()]); if that fails,
+#'  falls back to probing the last `days` days by date. See
+#'  [find_current_index()].
+#' @param days An integer: days to probe in the fallback, and the age past
+#'  which a stale index is reported.
 #' @return A character string representing the URL of the most recent index file, or NA if none found.
 #' @examples
 #' find_current_index_full(100)
 #' @export
 find_current_index_full <- function(days = 100) {
-  base <- "https://gt990datalake-rawdata.s3.us-east-1.amazonaws.com/Indices/990xmls/index_all_years_efiledata_xmls_created_on_"
-  dd <- get_last_n_dates(days)
-  urls <- paste0(base, dd, ".csv")
-  while.count <- 0
-  not.a.url <- TRUE
-  while (not.a.url) {
-    while.count <- while.count + 1
-    if (while.count > days) {
-      return(NA)
-    }
-    not.a.url <- !url_is_valid(urls[while.count])
-  }
-  return(urls[while.count])
+  find_current_index( "full", days )
 }
 
 #' @title Find Most Recent AWS Batch Index
-#' @description Identifies the most recent AWS batch index file within the given number of days (only new files).
-#' @param days An integer specifying the number of past days to check.
+#' @description Identifies the most recent AWS batch index file (only new files).
+#' @details Lists the bucket anonymously ([list_gt_indices()]); if that fails,
+#'  falls back to probing the last `days` days by date. See
+#'  [find_current_index()].
+#' @param days An integer: days to probe in the fallback, and the age past
+#'  which a stale index is reported.
 #' @return A character string representing the URL of the most recent index file, or NA if none found.
 #' @examples
 #' find_current_index_batch(100)
 #' @export
 find_current_index_batch <- function(days = 100) {
-  base <- "https://gt990datalake-rawdata.s3.us-east-1.amazonaws.com/Indices/990xmls/index_latest_only_efiledata_xmls_created_on_"
-  dd <- get_last_n_dates(days)
-  urls <- paste0(base, dd, ".csv")
-  while.count <- 0
-  not.a.url <- TRUE
-  while (not.a.url) {
-    while.count <- while.count + 1
-    if (while.count > days) {
-      return(NA)
-    }
-    not.a.url <- !url_is_valid(urls[while.count])
-  }
-  return(urls[while.count])
+  find_current_index( "batch", days )
 }
 
 #' @title Get URL Status
