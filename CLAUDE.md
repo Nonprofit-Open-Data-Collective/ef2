@@ -40,6 +40,8 @@ A person's name sitting in `BusinessName` is the second kind. Do not "fix" it.
 `get_table_id()` derives `TABLE_ID` from the **last** bracketed index in an
 xpath. Where a repeating group sits at the part level, two different parts can
 yield the same `TABLE_ID` — see EF2-1. Treat that function as sensitive.
+Its format is fixed-width, `TID-000-000-001`, so text order equals repeat
+order (EF2-17); published tables are sorted `ORG_EIN, OBJECTID, TABLE_ID`.
 
 ## Published archives
 

@@ -1551,16 +1551,82 @@ the 990 tables are unaffected. The defect is in the 990-PF archives only.
 **Workaround used:** the PF relabel step (`PF_V2_3_WORK/pf_stage.R`) strips every
 index before relabelling:
 `UPDATE FLATXML SET XPATH2 = regexp_replace(XPATH2, '\[[0-9]+\]', '', 'g')`.
-That is enough because labels are assigned by exact `XPATH2` match (see the
-efile_v2_3 note below).
+That is enough for the published tables because labels are assigned, and rows
+selected, by exact `XPATH2` match (see the efile_v2_3 note below).
 
-`get_table_id()` was not affected: it already matched `\\[[0-9]+\\]`. A 6-digit
-index gives `TID-100000`, one character wider than usual, which is harmless.
+`TABLE_HEADER` carries the same index, because `get_header()` is computed from the
+unstripped `XPATH2`. Nothing selects on `TABLE_HEADER`, so no table lost rows
+through it, but the column was wrong in every affected row.
+
+`get_table_id()` read the 6-digit index correctly (it already matched
+`\\[[0-9]+\\]`), but the ID it built does not sort. See EF2-17.
 
 **Fixed (branch `fix/ef2-16-xpath2-repeat-index`).** The regex is now
 `\\[[0-9]+\\]`. No other `{1,5}` pattern exists in `R/`. A test flattens a
 document with 100,001 repeats and checks that every `XPATH2` is index-free and
 every row gets its concordance label. It fails on the old regex.
+
+**Archives repaired in place (2026-10-07).** Same row counts as above in every
+case, one filing a year, every other year clean.
+
+- `990PF/<year>/EFILEPF<year>.duckdb`, TY2020–2023
+  (`990PF/scripts/07-fix-xpath2-index.R`, log `990PF/logs/fix-xpath2-index.tsv`).
+  `XPATH2` and `TABLE_HEADER` are stripped. `VARIABLE_NAME` and `RDB_TABLE` are
+  copied from the same xpath in the database's unaffected rows (repeats
+  1–99,999), i.e. what that build assigned. All 13–20 affected xpaths a year
+  had such a match. One transaction per year, committed only when no index is
+  left and no xpath carries two labels. Afterwards `XPATH2` matches the
+  `DUCKDB_PF_V2_3` copies row for row.
+- `DUCKDB_PF_V2_3/EFILEPF<year>.duckdb` (`PF_V2_3_WORK/pf_fix_table_header.R`).
+  `XPATH2` and the labels were already right; `TABLE_HEADER` is now stripped
+  too. `RELABEL_LOG` gains `table_header_index_fixed` (the row count, 0 in clean
+  years), so all 16 files changed.
+
+Neither set has been re-uploaded. Until it is, `s3://nccs-efile/duckpf/` (TY2020–2023)
+and `duckpf/efilepf_v2_3/` (all years) differ from the local files.
+The published PF CSV/Parquet tables are unaffected and need no rebuild.
+
+---
+
+## EF2-17 — `TABLE_ID` does not sort, and published rows have no defined order
+
+Found 2026-10-07 while repairing EF2-16.
+
+`get_table_id()` formatted the repeat number with `sprintf("%05.0f")`, which sets
+a minimum width, not a maximum. Repeat 100,000 became `TID-100000`, and as text
+that sorts before `TID-20000`. The largest in the PF data is `TID-363675`
+(TY2023), in one filing a year in TY2020–2023. `TABLE_ID` numbers repeats
+*within one filing*, so the value was never wrong. Only its order was.
+
+Separately, `write_table_output()` sorted only the Parquet output, and only by
+`ORG_EIN`. The CSV was unsorted. Within an EIN, neither format listed rows in any
+defined order. The order of repeating-group rows can carry meaning, e.g. the
+order in which a filer listed its grants.
+
+**Fixed (branch `table-id-sort`).**
+- `get_table_id()` writes nine digits in groups of three: `TID-000-000-001`,
+  `TID-000-363-675`. 1:1 fields are `TID-000-000-000`. Text order now equals
+  numeric order up to 999,999,999, and a larger index raises an error rather
+  than producing an ID that mis-sorts.
+- `write_table_output()` sorts **both** CSV and Parquet by
+  `ORG_EIN, OBJECTID, TABLE_ID`, skipping keys a table lacks (T00 tables have no
+  `TABLE_ID`). Filing date was considered and left out:
+  `RETURN_AMENDED_X` and `RETURN_PARTIAL_X` already distinguish amended returns,
+  and the timestamps carry mixed UTC offsets, so sorting them takes a cast.
+- Tests cover the format, its sort order, the overflow error, and the row order
+  of both outputs.
+
+**Every published table changes.** `TABLE_ID` is a column on every T01+ table,
+and row order changes on all of them. This lands in `efile_v2_3` and
+`efilepf_v2_3` before release, not in a new version. Rolling it out means
+rewriting `FLATXML.TABLE_ID` in the archives (no re-parse needed), then
+rebuilding and re-uploading every table.
+
+**Consumers.** Anything that parses the number out of `TABLE_ID` must strip the
+dashes as well as the prefix. `superstructure`'s `norm_tid()` does
+`as.integer(sub("^TID-", "", x))` inside `suppressWarnings()`, so it would return
+`NA` silently. It and `invert.R` (`sprintf("TID-%05d")`) need updating with the
+release.
 
 ---
 

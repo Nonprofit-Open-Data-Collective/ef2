@@ -12,7 +12,7 @@ write_table_output(
   output = c("csv", "parquet", "both"),
   dest = "CSV/",
   normalize_empty = TRUE,
-  sort_key = "ORG_EIN",
+  sort_key = c("ORG_EIN", "OBJECTID", "TABLE_ID"),
   compression = "zstd",
   compression_level = 9L,
   row_group_size = 50000L,
@@ -36,10 +36,13 @@ the path the package has always used.}
 \item{normalize_empty}{Logical; collapse \code{''} to NULL in Parquet so it agrees
 with the CSV on read-back. See Details.}
 
-\item{sort_key}{Column to sort by before writing Parquet, or NULL. Sorting
-makes row-group min/max statistics selective and shrinks the file: TY2023
-header went from 61.5 MB to 56.2 MB sorted on \code{ORG_EIN}. Every published
-table carries the KEYS columns, so \code{ORG_EIN} is always present.}
+\item{sort_key}{Columns to sort both outputs by, in order, or NULL. Keys the
+table lacks are skipped: \code{TABLE_ID} exists only on repeating-group tables.
+The default keeps each filing's rows together and its repeating groups in
+filing order, which \code{TABLE_ID}'s fixed width makes a plain text sort.
+Sorting also makes Parquet row-group min/max statistics selective and
+shrinks the file: TY2023 header went from 61.5 MB to 56.2 MB sorted on
+\code{ORG_EIN}.}
 
 \item{compression}{Parquet codec. \code{"zstd"} gives 61.5 MB against snappy's
 109.7 MB on the TY2023 header table.}
@@ -82,7 +85,6 @@ agree with its own CSV sibling. In the TY2023 header table that is roughly
 
 \code{normalize_empty = TRUE} collapses \code{''} to NULL in the Parquet output only,
 reproducing what every CSV reader already does, so the two published formats
-answer identically. The CSV output stays byte-identical to what the package
-writes today. Set \code{normalize_empty = FALSE} to keep the distinction, but only
+answer identically. The CSV cells are written as they are. Set \code{normalize_empty = FALSE} to keep the distinction, but only
 alongside a documented note that the two formats differ by design.
 }
