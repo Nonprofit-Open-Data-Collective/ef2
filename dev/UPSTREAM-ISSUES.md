@@ -244,6 +244,17 @@ gunzip the extension manually, then connect with
 `config = list(allow_unsigned_extensions = "true")` and
 `LOAD '<path>/httpfs.duckdb_extension'`.
 
+**Resolved by upgrading (verified 2026-10-07).** With R `duckdb` 1.5.5 on R 4.5.3
+(Windows), plain `INSTALL httpfs; LOAD httpfs;` works in-process. The 16 v2_3
+`KEYS` tables were read remotely this way, about 5 s per year. The workaround
+above is only needed on older `duckdb` builds.
+
+One catch remains. By default R `duckdb` keeps extensions in a per-session temp
+directory, so `INSTALL httpfs` has to run in every R session. A bare
+`LOAD httpfs` in a fresh session fails with "Extension ... not found". Use
+`dbConnect(duckdb(shared_home = TRUE))`, or create `~/.duckdb`, to keep the
+extension between sessions.
+
 ### Suggested change
 
 Give `generate_xpath_report()` a `db_path` argument that accepts a URL, skip the
@@ -1686,8 +1697,8 @@ missing from the GTDC index.
 
 **Effect on `efile_v2_3` (checked 2026-10-07):** `OBJECTID` was read from
 `KEYS` in all 16 published v2_3 databases over httpfs, 6,007,484 rows in
-total. In `KEYS` the value carries an `OID-` prefix, so strip it before joining
-to an index.
+total. ef2's `OBJECTID` carries an `OID-` prefix in every table, while the IRS
+and GTDC indices use the bare 18 digits, so strip the prefix for this join.
 
 Every v2_3 filing is in the GTDC full index. The databases contain exactly the
 990/990EZ filings that GT had indexed **up to its 2026-06-04 release**, which
