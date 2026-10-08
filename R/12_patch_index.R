@@ -523,13 +523,20 @@ upload_patch <- function( dir, build, bucket = "nccs-efile", dry_run = TRUE, wor
   put <- function( f ) {
     type <- if ( grepl( "\\.csv$", f ) ) "text/csv" else "application/xml"
     isTRUE( tryCatch(
-      aws.s3::put_object( file.path( dir, f ), object = paste0( prefix, f ), bucket = bucket,
+      aws.s3::put_object( file = file.path( dir, f ), object = paste0( prefix, f ), bucket = bucket,
                           headers = list( `Content-Type` = type ) ),
       error = function(e) FALSE ) )
   }
   future::plan( future::multisession, workers = workers )
   on.exit( future::plan( future::sequential ), add = TRUE )
-  ok <- unlist( furrr::future_map( todo, put ) )
+  # Upload in chunks so a long run reports progress.
+  chunks <- split( todo, ceiling( seq_along(todo) / 5000 ) )
+  ok <- logical(0)
+  for ( k in seq_along(chunks) ) {
+    ok <- c( ok, unlist( furrr::future_map( chunks[[k]], put ) ) )
+    message( format( Sys.time(), "%H:%M:%S" ), "  ", length(ok), " / ", length(todo),
+             " done; ", sum(!ok), " failed so far" )
+  }
   message( sum(ok), " uploaded; ", sum(!ok), " failed." )
   invisible( data.frame( file = todo, uploaded = ok ) )
 }
