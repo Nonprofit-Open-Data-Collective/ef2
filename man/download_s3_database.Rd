@@ -6,7 +6,7 @@
 \usage{
 download_s3_database(
   year,
-  version = "efile_v2_1",
+  version = "efile_v2_3",
   dest = NULL,
   overwrite = FALSE
 )
@@ -14,7 +14,7 @@ download_s3_database(
 \arguments{
 \item{year}{Tax year (integer or character).}
 
-\item{version}{S3 version subfolder under duckdb/ (default "efile_v2_1").
+\item{version}{S3 version subfolder under duckdb/ (default "efile_v2_3").
 Set NULL or "" for the unversioned path.}
 
 \item{dest}{Destination path. Defaults to \verb{EFILE<year>.duckdb} in the

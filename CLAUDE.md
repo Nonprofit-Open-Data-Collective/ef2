@@ -81,6 +81,13 @@ the tables. Scripts, logs and the v2_2 → v2_3 diff (`dims_compare.csv`) are in
 `C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026/V2_3_WORK/`. The record is in
 `dev/UPSTREAM-ISSUES.md` under "efile_v2_3".
 
+The S3 functions default to `version = "efile_v2_3"`. `update_db()` labels new
+filings with `release_concordance()`, which returns the concordance pinned in
+`inst/extdata/concordance-<release>.csv.gz`. It is pinned rather than read from
+concordance990, because later concordance990 releases return different rows. A
+new release needs its own file there. Without one, `update_db()` stops rather
+than mixing two label sets in one archive.
+
 **Query them remotely rather than downloading.** DuckDB reads these over HTTPS
 with range requests, pulling only the pages needed:
 

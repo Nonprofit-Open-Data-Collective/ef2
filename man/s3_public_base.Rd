@@ -12,6 +12,6 @@ Character S3 prefix, with a trailing slash.
 \description{
 Returns the \verb{s3://} prefix used when \code{post_to_s3 = TRUE}. The default is the
 value \code{\link[=write_csv_to_s3]{write_csv_to_s3()}} has always hard-coded, so behaviour is unchanged;
-override it with \code{options( ef2.s3_public_base = "s3://nccs-efile/public/efile_v2_2/" )}
+override it with \code{options( ef2.s3_public_base = "s3://nccs-efile/public/efile_v2_3/" )}
 to publish to a different release prefix without editing the package.
 }

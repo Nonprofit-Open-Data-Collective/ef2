@@ -22,6 +22,50 @@ get_concordance <- function( gh=TRUE ){
   return( concordance )
 }
 
+#' Concordance a published release was labelled with
+#'
+#' New filings added to an archive must carry the same labels as the filings
+#' already in it, or `FLATXML` ends up with two label sets and the tables built
+#' from it have renamed and moved columns that do not line up.
+#'
+#' * `efile_v2_3`: the concordance recorded in the archives' `RELABEL_LOG`,
+#'   concordance990 1.99.1 (commit 3af11bb), `concordance("v2", form = "F990")`,
+#'   7,016 rows. Shipped as `inst/extdata/concordance-efile_v2_3.csv.gz`
+#'   (`xpath`, `variable_name`, `rdb_table`). Pinned rather than read from
+#'   concordance990, because later releases of that package return a different
+#'   concordance (2.0.1: 7,075 rows).
+#' * `efile_v2_0` to `efile_v2_2`, `NULL` or `""`: [get_concordance()], the
+#'   master concordance those archives were built with.
+#' * Anything else, e.g. `efilepf_v2_3`: an error. Pass `ccf` explicitly.
+#'
+#' @param release Release name, e.g. `"efile_v2_3"`.
+#' @return A data frame with at least `xpath`, `variable_name`, `rdb_table`.
+#' @export
+release_concordance <- function( release ){
+  if( is.null(release) || release %in% c( "", "efile_v2_0", "efile_v2_1", "efile_v2_2" ) ){
+    return( get_concordance() )
+  }
+  f <- system.file( "extdata", paste0( "concordance-", release, ".csv.gz" ), package = "ef2" )
+  if( ! nzchar(f) ){
+    stop( "No packaged concordance for release '", release, "'. ",
+          "Pass `ccf` with the concordance that release was labelled with." )
+  }
+  utils::read.csv( f, colClasses = "character" )
+}
+
+#' Release recorded in a local archive's RELABEL_LOG
+#'
+#' @param db_path Path to a local `.duckdb` archive.
+#' @return The most recent `RELABEL_LOG.release`, or `NULL` if the archive has
+#'   no `RELABEL_LOG` (archives built before efile_v2_3).
+#' @keywords internal
+db_release <- function( db_path ){
+  con <- DBI::dbConnect( duckdb::duckdb(), dbdir = db_path, read_only = TRUE )
+  on.exit( DBI::dbDisconnect( con, shutdown = TRUE ) )
+  if( ! DBI::dbExistsTable( con, "RELABEL_LOG" ) ){ return( NULL ) }
+  DBI::dbGetQuery( con, "SELECT release FROM RELABEL_LOG ORDER BY applied DESC LIMIT 1" )$release
+}
+
 #' Prepare a concordance crosswalk (uppercase colnames)
 #'
 #' @param ccf Optional concordance; if NULL, loads via `get_concordance()`.

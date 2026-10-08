@@ -30,7 +30,7 @@ open_database <- function(s3_region = "us-east-1",
 #' Attach an S3-hosted DuckDB database by filename
 #'
 #' @param filename DuckDB filename within s3://nccs-efile/duckdb/.
-#' @param version Optional S3 version subfolder under duckdb/ (e.g. "efile_v2_1").
+#' @param version Optional S3 version subfolder under duckdb/ (e.g. "efile_v2_3").
 #' @param anonymous Logical for anonymous access.
 #' @return DBI connection with attached database.
 #' @export
@@ -71,7 +71,7 @@ configure_aws_credentials <- function(con) {
 #' @description
 #' Returns the `s3://` prefix used when `post_to_s3 = TRUE`. The default is the
 #' value [write_csv_to_s3()] has always hard-coded, so behaviour is unchanged;
-#' override it with `options( ef2.s3_public_base = "s3://nccs-efile/public/efile_v2_2/" )`
+#' override it with `options( ef2.s3_public_base = "s3://nccs-efile/public/efile_v2_3/" )`
 #' to publish to a different release prefix without editing the package.
 #'
 #' @return Character S3 prefix, with a trailing slash.
