@@ -72,12 +72,12 @@ table_names <- c("F9-P08-T00-REVENUE","F9-P09-T00-EXPENSES","F9-P10-T00-BALANCE-
 extract_csv_tables( wd=wd, years=years, table_names=table_names )
 ```
 
-The processed DuckDB databases are available at:  `https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v2_1/` + EFILE{YEAR}.duckdb
+The processed DuckDB databases are available at:  `https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v2_2/` + EFILE{YEAR}.duckdb
 
 You can attach S3 versions of DuckDB databases using virtual memory in order to execute processes without downloading the files to your local machine.
 
 ```r
-version <- "efile_v2_1"
+version <- "efile_v2_2"
 con <- get_s3_database( filename="EFILE2021.duckdb", version=version )
 ```
 

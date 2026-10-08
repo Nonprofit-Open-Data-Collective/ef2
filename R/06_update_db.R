@@ -7,11 +7,11 @@
 #'
 #' @param year Integer tax year.
 #' @param index Data frame with columns TaxYear and URL.
-#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_2").
 #'   Set to NULL or "" to target the unversioned duckdb/ path.
 #' @return Character vector of missing URLs.
 #' @export
-find_missing_urls <- function(year, index, version = "efile_v2_1") {
+find_missing_urls <- function(year, index, version = "efile_v2_2") {
   base::message("\U0001F50E Checking for missing URLs in TaxYear ", year)
 
   year <- as.character(year)
@@ -50,10 +50,10 @@ find_missing_urls <- function(year, index, version = "efile_v2_1") {
 #' @param year Integer tax year.
 #' @param index Data frame with TaxYear and URL columns.
 #' @param path Directory for the temporary and merged database files.
-#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_2").
 #' @return Invisibly path to merged database or NULL.
 #' @export
-update_db <- function(year, index, path=".", version = "efile_v2_1") {
+update_db <- function(year, index, path=".", version = "efile_v2_2") {
   base::message("\U0001F680 Updating database for TaxYear ", year)
 
   missing_urls <- find_missing_urls(year, index, version = version)
@@ -86,14 +86,14 @@ update_db <- function(year, index, path=".", version = "efile_v2_1") {
 #' @param missing_urls Character vector (for logging).
 #' @param temp_db_path Path to temporary DuckDB with new filings.
 #' @param output_path Path for final merged DB.
-#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_2").
 #' @param source_db Optional path/URL of the base ("source") database to merge
 #'   into. Defaults to `NULL`, in which case the S3-hosted archive for `year`
 #'   (under `version`) is used. Pass a local `.duckdb` path to merge into an
 #'   already-downloaded archive or for testing.
 #' @return Invisibly `output_path`.
 #' @export
-merge_databases <- function(year, missing_urls, temp_db_path, output_path, version = "efile_v2_1", source_db = NULL) {
+merge_databases <- function(year, missing_urls, temp_db_path, output_path, version = "efile_v2_2", source_db = NULL) {
   # Coerce year to character so filename/URL/log builders never hit sprintf("%d")
   # with a character TaxYear (a common failure mode when years come from an index).
   year <- base::as.character(year)
@@ -212,7 +212,7 @@ merge_databases <- function(year, missing_urls, temp_db_path, output_path, versi
 #' multipart parallelism, otherwise falls back to [utils::download.file()].
 #'
 #' @param year Tax year (integer or character).
-#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_2").
 #'   Set NULL or "" for the unversioned path.
 #' @param dest Destination path. Defaults to `EFILE<year>.duckdb` in the
 #'   working directory.
@@ -220,7 +220,7 @@ merge_databases <- function(year, missing_urls, temp_db_path, output_path, versi
 #'   download is skipped.
 #' @return Invisibly, the local destination path.
 #' @export
-download_s3_database <- function(year, version = "efile_v2_1", dest = NULL, overwrite = FALSE) {
+download_s3_database <- function(year, version = "efile_v2_2", dest = NULL, overwrite = FALSE) {
   year <- base::as.character(year)
   version_seg <- if (base::is.null(version) || version == "") "" else base::paste0(version, "/")
   if (base::is.null(dest)) dest <- base::paste0("EFILE", year, ".duckdb")

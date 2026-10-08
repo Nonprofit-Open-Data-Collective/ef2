@@ -31,7 +31,7 @@ What has actually been *processed* lives in the published DuckDB databases on
 the NCCS S3 bucket, one database per year:
 
 ```
-https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/efile_v2_1/EFILE<YEAR>.duckdb
+https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/efile_v2_2/EFILE<YEAR>.duckdb
 ```
 
 Inside each database, the `KEYS` table holds one row per processed return, and
