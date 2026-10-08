@@ -15,9 +15,8 @@ A character string of SQL.
 }
 \description{
 One row per 990 / 990-EZ filing that declares a status, with
-\code{F9_00_ORG_EXEMPT_TYPE} set to \code{"501c2"} … \code{"501c29"}, \code{"4947a1"} or \code{"527"},
-and \code{n_subsection}, the number of 501(c) subsection values the filing
-carries. Reads only \code{FLATXML} and \code{ATTRIBUTES}, so it works on any built
+\code{F9_00_ORG_EXEMPT_TYPE} set to \code{"501c2"} … \code{"501c29"}, \code{"4947a1"} or \code{"527"}.
+Reads only \code{FLATXML} and \code{ATTRIBUTES}, so it works on any built
 archive without re-parsing XML. See EF2-12.
 }
 \details{
@@ -42,5 +41,9 @@ filing selects more than one status. A checkbox counts as ticked when it is
 present and not an explicit negative (\code{"0"}, \code{"false"}, \code{"n"}, \code{"no"}); every
 observed value is \code{"X"}. Every path step accepts an optional \verb{irs:} prefix
 (EF2-11).
+
+A filing carrying more than one distinct subsection value keeps all of them,
+sorted and joined with \code{";"} (e.g. \code{"501c4;501c6"}), rather than having one
+picked silently (cf. EF2-3). None has been observed in TY2009-2024.
 }
 \keyword{internal}

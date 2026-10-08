@@ -1377,9 +1377,10 @@ It is computed when the table is built (`add_exempt_type()`, called from
 
 A box counts as ticked when it is present and not an explicit negative. Every
 observed value is `"X"`. Paths are matched on `XPATH2`, and each step accepts an
-`irs:` prefix (EF2-11). If a filing ever carries two subsection values, the build
-stops rather than picking one, because picking one silently is what went wrong
-in EF2-3.
+`irs:` prefix (EF2-11). If a filing ever carries more than one distinct
+subsection value, all of them are kept, sorted and joined with `;` (for
+example `"501c4;501c6"`), rather than one being picked silently as in EF2-3.
+None has been observed.
 
 **Checked across TY2009–2024 by xpath** (on the `keys-501c-subsection` branch,
 detecting on `XPATH2` so that unmapped and prefixed variants could not hide):

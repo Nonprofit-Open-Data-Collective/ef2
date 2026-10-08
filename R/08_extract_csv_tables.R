@@ -49,9 +49,8 @@ add_keys <- function( db_tbl, table_name, year, cc_file, con ) {
 #' SQL deriving each filing's tax-exempt status as one string
 #'
 #' One row per 990 / 990-EZ filing that declares a status, with
-#' `F9_00_ORG_EXEMPT_TYPE` set to `"501c2"` … `"501c29"`, `"4947a1"` or `"527"`,
-#' and `n_subsection`, the number of 501(c) subsection values the filing
-#' carries. Reads only `FLATXML` and `ATTRIBUTES`, so it works on any built
+#' `F9_00_ORG_EXEMPT_TYPE` set to `"501c2"` … `"501c29"`, `"4947a1"` or `"527"`.
+#' Reads only `FLATXML` and `ATTRIBUTES`, so it works on any built
 #' archive without re-parsing XML. See EF2-12.
 #'
 #' Three encodings are reconciled:
@@ -74,6 +73,10 @@ add_keys <- function( db_tbl, table_name, year, cc_file, con ) {
 #' observed value is `"X"`. Every path step accepts an optional `irs:` prefix
 #' (EF2-11).
 #'
+#' A filing carrying more than one distinct subsection value keeps all of them,
+#' sorted and joined with `";"` (e.g. `"501c4;501c6"`), rather than having one
+#' picked silently (cf. EF2-3). None has been observed in TY2009-2024.
+#'
 #' @param year Integer tax year; tables are read as `EFILE<year>.FLATXML` and
 #'   `EFILE<year>.ATTRIBUTES`.
 #' @return A character string of SQL.
@@ -92,7 +95,8 @@ exempt_type_sql <- function( year ) {
 
   sprintf( "
 WITH sub AS (
-  SELECT OBJECTID, count(*) AS n_subsection, min(trim(attr_value)) AS subsection
+  SELECT OBJECTID,
+    array_to_string(list_sort(list_distinct(list('501c' || trim(attr_value)))), ';') AS subsection
   FROM %s.ATTRIBUTES
   WHERE attr_name IN ('organization501cTypeTxt', 'typeOf501cOrganization')
     AND regexp_matches(xpath, '%s')
@@ -110,12 +114,11 @@ ind AS (
     AND lower(trim(VALUE)) NOT IN ('0', 'false', 'n', 'no')
   GROUP BY OBJECTID )
 SELECT coalesce(sub.OBJECTID, ind.OBJECTID) AS OBJECTID,
-  CASE WHEN sub.subsection IS NOT NULL THEN '501c' || sub.subsection
+  CASE WHEN sub.subsection IS NOT NULL THEN sub.subsection
        WHEN ind.c3   THEN '501c3'
        WHEN ind.a1   THEN '4947a1'
        WHEN ind.s527 THEN '527'
-  END AS F9_00_ORG_EXEMPT_TYPE,
-  coalesce(sub.n_subsection, 0) AS n_subsection
+  END AS F9_00_ORG_EXEMPT_TYPE
 FROM sub FULL JOIN ind ON sub.OBJECTID = ind.OBJECTID",
     db, re_sub, re_c3, re_a1, re_527, db, re_any )
 }
@@ -127,25 +130,13 @@ FROM sub FULL JOIN ind ON sub.OBJECTID = ind.OBJECTID",
 #' here rather than in `KEYS` so that only `F9-P00-T00-HEADER` changes, and so
 #' that existing archives gain it on a table rebuild, with no re-parse.
 #'
-#' Stops if any filing carries more than one 501(c) subsection value. That has
-#' never been observed, and picking one silently is how EF2-3 went wrong.
-#'
 #' @param db_tbl Lazy tibble of the header table, with `OBJECTID`.
 #' @param year Integer tax year.
 #' @param con DBI connection.
 #' @return `db_tbl` with `F9_00_ORG_EXEMPT_TYPE` added.
 #' @export
 add_exempt_type <- function( db_tbl, year, con ) {
-  q <- exempt_type_sql( year )
-  n_multi <- DBI::dbGetQuery( con, paste0(
-    "SELECT count(*) AS n FROM (", q, ") WHERE n_subsection > 1" ) )$n
-  if ( n_multi > 0 ) {
-    stop( n_multi, " filing(s) in ", year, " carry more than one 501(c) subsection value; ",
-          "F9_00_ORG_EXEMPT_TYPE cannot be assigned. See exempt_type_sql()." )
-  }
-
-  et <- dplyr::tbl( con, dplyr::sql( q ) ) %>%
-    dplyr::select( "OBJECTID", "F9_00_ORG_EXEMPT_TYPE" )
+  et <- dplyr::tbl( con, dplyr::sql( exempt_type_sql( year ) ) )
   db_tbl <- dplyr::left_join( db_tbl, et, by = "OBJECTID" )
 
   stat <- grep( "^F9_00_EXEMPT_STAT_", colnames( db_tbl ), value = TRUE )

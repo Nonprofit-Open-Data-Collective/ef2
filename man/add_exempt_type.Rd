@@ -22,7 +22,3 @@ places it after the \verb{F9_00_EXEMPT_STAT_*} checkboxes it summarises. It live
 here rather than in \code{KEYS} so that only \code{F9-P00-T00-HEADER} changes, and so
 that existing archives gain it on a table rebuild, with no re-parse.
 }
-\details{
-Stops if any filing carries more than one 501(c) subsection value. That has
-never been observed, and picking one silently is how EF2-3 went wrong.
-}

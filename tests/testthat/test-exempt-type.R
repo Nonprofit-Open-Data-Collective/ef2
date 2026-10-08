@@ -115,15 +115,20 @@ test_that("add_exempt_type() joins the status after the checkboxes and keeps eve
   expect_identical( out$F9_00_ORG_EXEMPT_TYPE, c( "501c3", "501c6", NA ) )
 })
 
-test_that("add_exempt_type() stops when a filing carries two subsection values", {
-  a <- data.frame( OBJECTID = c( "A", "A" ),
-                   xpath = c( paste0( R, "Organization501cInd" ), paste0( EZ, "Organization501cInd" ) ),
-                   attr_name = "organization501cTypeTxt", attr_value = c( "4", "6" ) )
+test_that("several subsection values on one filing are kept, sorted and joined with ';'", {
+  # A and B: two distinct values, in either order. C: the same value twice.
+  a <- data.frame( OBJECTID = c( "A", "A", "B", "B", "C", "C" ),
+                   xpath = paste0( R, "Organization501cInd" ),
+                   attr_name = "organization501cTypeTxt",
+                   attr_value = c( "6", "4", "4", "6", "7", "7" ) )
   f <- data.frame( OBJECTID = character(), XPATH2 = character(), VALUE = character() )
   con <- exempt_fixture( f, a )
   on.exit( DBI::dbDisconnect( con, shutdown = TRUE ) )
-  DBI::dbWriteTable( con, "HDR", data.frame( OBJECTID = "A" ) )
 
-  expect_error( add_exempt_type( dplyr::tbl( con, "HDR" ), 2024, con ),
-                "more than one 501\\(c\\) subsection" )
+  expect_identical( exempt_types( con ),
+                    c( A = "501c4;501c6", B = "501c4;501c6", C = "501c7" ) )
+
+  DBI::dbWriteTable( con, "HDR", data.frame( OBJECTID = c( "A", "C" ) ) )
+  out <- dplyr::collect( add_exempt_type( dplyr::tbl( con, "HDR" ), 2024, con ) )
+  expect_identical( out$F9_00_ORG_EXEMPT_TYPE[ order( out$OBJECTID ) ], c( "501c4;501c6", "501c7" ) )
 })
