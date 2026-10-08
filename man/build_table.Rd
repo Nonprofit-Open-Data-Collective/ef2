@@ -36,5 +36,6 @@ Parquet file is never a re-parse of the CSV. See \code{\link[=write_table_output
 Invisibly the lazy tibble.
 }
 \description{
-Build a structured wide table and optionally export to CSV/S3
+\code{F9-P00-T00-HEADER} also gains the derived \code{F9_00_ORG_EXEMPT_TYPE}; see
+\code{\link[=add_exempt_type]{add_exempt_type()}}.
 }

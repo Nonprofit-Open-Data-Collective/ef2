@@ -1316,9 +1316,8 @@ did.
 ### Recommended, in order
 
 1. **501(c) subsection.** Largest coverage, unambiguous semantics, and it turns
-   an existing binary flag into a 25-level classification. `KEYS` is the natural
-   home — it is filing-level, one value per return, and sits beside `VERSION`,
-   which arrived the same way.
+   an existing binary flag into a 25-level classification. **Done** — see
+   "Resolved" below. It went into the header table, not `KEYS`.
 2. **`fndrsngEventContriPrevRptAmt`** — a dollar figure on a 990-EZ line.
 3. **`softwareId` / `softwareVersionNum`** — not filing data, but it supports
    work on filing quality and vendor effects, and belongs with `VERSION`.
@@ -1343,6 +1342,91 @@ be made deliberately rather than inferred from whichever route is easiest.
 
 Supporting detail: `EFILE_BUILD_SEPT_2026/attr_analysis/attr_names_by_year.csv`
 and `attr_panel_coverage.csv`.
+
+### Resolved: `F9_00_ORG_EXEMPT_TYPE` in the header table (2026-10-07)
+
+`F9-P00-T00-HEADER` gains one column, `F9_00_ORG_EXEMPT_TYPE`, placed after the
+`F9_00_EXEMPT_STAT_*` checkboxes. Values are `"501c2"`…`"501c29"`, `"4947a1"`,
+`"527"` or NA. It is a string because 4947 and 527 are IRC sections rather than
+501(c) subsections: in one numeric column, sorting and ranges would be
+meaningless and 4947(a)(1) would lose its `(a)(1)`. The values match the
+`TaxStatus` naming in Giving Tuesday's index.
+
+It is computed when the table is built (`add_exempt_type()`, called from
+`build_table()`), from `ATTRIBUTES` and `FLATXML`. **No other table changes.**
+
+**Why not `KEYS`.** It was first written into `get_keys()` (branch
+`keys-501c-subsection`, 2026-09-24) and dropped in favour of the header table:
+
+- In `KEYS`, all 137 tables would gain a column.
+- `get_keys()` runs when the XML is parsed. The v2_3 archives were relabelled,
+  not re-parsed, so the `KEYS` version would have needed a full rebuild from XML.
+- Everything the column needs is already in the archives. Rebuilding one table
+  a year takes about 10 s.
+
+**Three encodings are reconciled.**
+
+- **501(c) other than (3):** the subsection number is an attribute, in two
+  spellings (see above).
+- **501(c)(3):** a checkbox from TY2010 on. TY2009 has no such checkbox, so
+  (c)(3) filers write `3` into the subsection attribute instead. All 39,633
+  literal `3` values in the panel are TY2009, and none of those filings ticks a
+  (c)(3) box. Both spellings map to `"501c3"`. Without that, TY2009 would report
+  39,633 subsection-3 organizations and every later year none.
+- **4947(a)(1) and 527:** checkboxes.
+
+A box counts as ticked when it is present and not an explicit negative. Every
+observed value is `"X"`. Paths are matched on `XPATH2`, and each step accepts an
+`irs:` prefix (EF2-11). If a filing ever carries two subsection values, the build
+stops rather than picking one, because picking one silently is what went wrong
+in EF2-3.
+
+**Checked across TY2009–2024 by xpath** (on the `keys-501c-subsection` branch,
+detecting on `XPATH2` so that unmapped and prefixed variants could not hide):
+
+| year | 501(c)(3) | 501(c) other | 4947(a)(1) | >1 selected | 527 |
+|---|---|---|---|---|---|
+| 2009 | — | 48,768 | 13 | 0 | 0 |
+| 2012 | 204,706 | 68,570 | 162 | 0 | 0 |
+| 2018 | 321,182 | 99,495 | 149 | 0 | 0 |
+| 2024 | 351,608 | 104,296 | 266 | 0 | 0 |
+
+No filing selects more than one status in any year, so the order of the `CASE`
+branches never matters. No filing selects 527 in any year. TY2009's 48,768
+includes the 39,633 (c)(3) filers who wrote `3`.
+
+**Verified on the v2_3 archives:**
+
+- **Rebuilt TY2024 and TY2009 headers.** Each was compared with its published
+  v2_3 file using `EXCEPT ALL` in both directions, over every published column.
+  Zero rows differ, and the row counts match (456,170 and 48,781). The only
+  change is the added column.
+- **Every filing is classified.** TY2024: 351,608 `501c3`, 104,296 other
+  501(c), 266 `4947a1`. TY2009: 39,633 `501c3`, 9,135 other 501(c), 13
+  `4947a1`. The derived value agrees with the published checkboxes on every row.
+- **Against `get_keys()`.** The SQL and the branch's `get_keys()` (which reads
+  the XML directly) were run on 159 TY2024 filings: every category, 990 and
+  990-EZ. All 159 agree.
+
+**Rollout.** Published v2_3 tables do not have the column until
+`F9-P00-T00-HEADER` is rebuilt and re-uploaded for each year. No other table is
+affected.
+
+**527 organizations are absent from the source, not filtered out.**
+`F9_00_EXEMPT_STAT_527_X` matches nothing in any year. It is a dead variable, the
+same class as EF2-9. Every `527` element in the filings is one of two things:
+
+- `RelatedOrgSect527OrgInd`: whether the filer is related to a 527 organization.
+- Schedule C's list of 527 organizations the filer paid.
+
+Neither is the filer's own status. Giving Tuesday's index has no `527` form type
+and no `527` `TaxStatus` either.
+
+**990-PF and 990-T are in the data lake but not in this build.**
+`prep_index()` defaults to `form.type = c("990", "990EZ")`, and `split_index()`
+never overrides that default. That leaves out 1,201,201 990-PF filings and
+114,313 990-T filings. This is a decision about what to batch, not a defect.
+990-PF is now built separately as `efilepf_v2_3`.
 
 ---
 

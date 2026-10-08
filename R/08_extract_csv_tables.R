@@ -46,7 +46,120 @@ add_keys <- function( db_tbl, table_name, year, cc_file, con ) {
   return( db_tbl )
 }
 
+#' SQL deriving each filing's tax-exempt status as one string
+#'
+#' One row per 990 / 990-EZ filing that declares a status, with
+#' `F9_00_ORG_EXEMPT_TYPE` set to `"501c2"` … `"501c29"`, `"4947a1"` or `"527"`,
+#' and `n_subsection`, the number of 501(c) subsection values the filing
+#' carries. Reads only `FLATXML` and `ATTRIBUTES`, so it works on any built
+#' archive without re-parsing XML. See EF2-12.
+#'
+#' Three encodings are reconciled:
+#' * 501(c) other than (3): the subsection number is an XML *attribute*
+#'   (`typeOf501cOrganization` TY2009-2012, `organization501cTypeTxt` TY2013+),
+#'   held in `ATTRIBUTES` and in no published table.
+#' * 501(c)(3): a checkbox element from TY2010. TY2009 has no such checkbox and
+#'   (c)(3) filers write `"3"` into the subsection attribute instead, so the
+#'   attribute branch yields `"501c3"` there too.
+#' * 4947(a)(1) and 527: checkbox elements. 527 has never been selected in
+#'   TY2009-2024 and is carried in case a schema ever produces one.
+#'
+#' A string rather than an integer, because 4947 and 527 are IRC sections, not
+#' 501(c) subsections. The values match the `TaxStatus` naming in Giving
+#' Tuesday's index.
+#'
+#' The `CASE` branches are ordered but never compete: across TY2009-2024 no
+#' filing selects more than one status. A checkbox counts as ticked when it is
+#' present and not an explicit negative (`"0"`, `"false"`, `"n"`, `"no"`); every
+#' observed value is `"X"`. Every path step accepts an optional `irs:` prefix
+#' (EF2-11).
+#'
+#' @param year Integer tax year; tables are read as `EFILE<year>.FLATXML` and
+#'   `EFILE<year>.ATTRIBUTES`.
+#' @return A character string of SQL.
+#' @keywords internal
+exempt_type_sql <- function( year ) {
+  db <- paste0( "EFILE", year )
+  N  <- "(irs:)?"
+  form <- sprintf( "^/%sReturn/%sReturnData/%sIRS990(EZ)?/", N, N, N )
+  part <- sprintf( "(%sForm990PartI/)?", N )
+  re_sub  <- sprintf( "%s%sOrganization501c(Ind)?$", form, N )
+  re_c3   <- sprintf( "%s%sOrganization501c3(Ind)?$", form, N )
+  re_a1   <- sprintf( "%s%s%sOrganization4947a1(NotPFInd)?$", form, part, N )
+  re_527  <- sprintf( "%s%s%sOrganization527(Ind)?$", form, part, N )
+  re_any  <- sprintf( "%s%s%sOrganization(501c3(Ind)?|4947a1(NotPFInd)?|527(Ind)?)$",
+                      form, part, N )
+
+  sprintf( "
+WITH sub AS (
+  SELECT OBJECTID, count(*) AS n_subsection, min(trim(attr_value)) AS subsection
+  FROM %s.ATTRIBUTES
+  WHERE attr_name IN ('organization501cTypeTxt', 'typeOf501cOrganization')
+    AND regexp_matches(xpath, '%s')
+    AND trim(attr_value) <> ''
+  GROUP BY OBJECTID ),
+ind AS (
+  SELECT OBJECTID,
+    bool_or(regexp_matches(XPATH2, '%s')) AS c3,
+    bool_or(regexp_matches(XPATH2, '%s')) AS a1,
+    bool_or(regexp_matches(XPATH2, '%s')) AS s527
+  FROM %s.FLATXML
+  WHERE TYPE = 'terminal'
+    AND regexp_matches(XPATH2, '%s')
+    AND trim(VALUE) <> ''
+    AND lower(trim(VALUE)) NOT IN ('0', 'false', 'n', 'no')
+  GROUP BY OBJECTID )
+SELECT coalesce(sub.OBJECTID, ind.OBJECTID) AS OBJECTID,
+  CASE WHEN sub.subsection IS NOT NULL THEN '501c' || sub.subsection
+       WHEN ind.c3   THEN '501c3'
+       WHEN ind.a1   THEN '4947a1'
+       WHEN ind.s527 THEN '527'
+  END AS F9_00_ORG_EXEMPT_TYPE,
+  coalesce(sub.n_subsection, 0) AS n_subsection
+FROM sub FULL JOIN ind ON sub.OBJECTID = ind.OBJECTID",
+    db, re_sub, re_c3, re_a1, re_527, db, re_any )
+}
+
+#' Add `F9_00_ORG_EXEMPT_TYPE` to the 990 header table
+#'
+#' Joins the status derived by [exempt_type_sql()] onto the header table and
+#' places it after the `F9_00_EXEMPT_STAT_*` checkboxes it summarises. It lives
+#' here rather than in `KEYS` so that only `F9-P00-T00-HEADER` changes, and so
+#' that existing archives gain it on a table rebuild, with no re-parse.
+#'
+#' Stops if any filing carries more than one 501(c) subsection value. That has
+#' never been observed, and picking one silently is how EF2-3 went wrong.
+#'
+#' @param db_tbl Lazy tibble of the header table, with `OBJECTID`.
+#' @param year Integer tax year.
+#' @param con DBI connection.
+#' @return `db_tbl` with `F9_00_ORG_EXEMPT_TYPE` added.
+#' @export
+add_exempt_type <- function( db_tbl, year, con ) {
+  q <- exempt_type_sql( year )
+  n_multi <- DBI::dbGetQuery( con, paste0(
+    "SELECT count(*) AS n FROM (", q, ") WHERE n_subsection > 1" ) )$n
+  if ( n_multi > 0 ) {
+    stop( n_multi, " filing(s) in ", year, " carry more than one 501(c) subsection value; ",
+          "F9_00_ORG_EXEMPT_TYPE cannot be assigned. See exempt_type_sql()." )
+  }
+
+  et <- dplyr::tbl( con, dplyr::sql( q ) ) %>%
+    dplyr::select( "OBJECTID", "F9_00_ORG_EXEMPT_TYPE" )
+  db_tbl <- dplyr::left_join( db_tbl, et, by = "OBJECTID" )
+
+  stat <- grep( "^F9_00_EXEMPT_STAT_", colnames( db_tbl ), value = TRUE )
+  if ( length( stat ) > 0 ) {
+    db_tbl <- dplyr::relocate( db_tbl, "F9_00_ORG_EXEMPT_TYPE",
+                               .after = dplyr::all_of( utils::tail( stat, 1 ) ) )
+  }
+  return( db_tbl )
+}
+
 #' Build a structured wide table and optionally export to CSV/S3
+#'
+#' `F9-P00-T00-HEADER` also gains the derived `F9_00_ORG_EXEMPT_TYPE`; see
+#' [add_exempt_type()].
 #'
 #' @param table_name Character table id.
 #' @param year Integer year.
@@ -66,6 +179,9 @@ build_table <- function( table_name, year, con, cc_file, post_to_s3 = FALSE,
   output  <- match.arg( output )
   wide_00 <- flatten_table( table_name = table_name, year = year, con = con )
   wide_00 <- add_keys( db_tbl = wide_00, table_name = table_name, year = year, cc_file = cc_file, con = con )
+  if ( table_name == "F9-P00-T00-HEADER" ) {
+    wide_00 <- add_exempt_type( db_tbl = wide_00, year = year, con = con )
+  }
 
   dest <- if ( post_to_s3 ) s3_public_base() else "CSV/"
   write_table_output( db_tbl = wide_00, table_name = table_name, year = year,
