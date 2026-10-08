@@ -244,6 +244,17 @@ gunzip the extension manually, then connect with
 `config = list(allow_unsigned_extensions = "true")` and
 `LOAD '<path>/httpfs.duckdb_extension'`.
 
+**Resolved by upgrading (verified 2026-10-07).** With R `duckdb` 1.5.5 on R 4.5.3
+(Windows), plain `INSTALL httpfs; LOAD httpfs;` works in-process. The 16 v2_3
+`KEYS` tables were read remotely this way, about 5 s per year. The workaround
+above is only needed on older `duckdb` builds.
+
+One catch remains. By default R `duckdb` keeps extensions in a per-session temp
+directory, so `INSTALL httpfs` has to run in every R session. A bare
+`LOAD httpfs` in a fresh session fails with "Extension ... not found". Use
+`dbConnect(duckdb(shared_home = TRUE))`, or create `~/.duckdb`, to keep the
+extension between sessions.
+
 ### Suggested change
 
 Give `generate_xpath_report()` a `db_path` argument that accepts a URL, skip the
@@ -1305,9 +1316,8 @@ did.
 ### Recommended, in order
 
 1. **501(c) subsection.** Largest coverage, unambiguous semantics, and it turns
-   an existing binary flag into a 25-level classification. `KEYS` is the natural
-   home — it is filing-level, one value per return, and sits beside `VERSION`,
-   which arrived the same way.
+   an existing binary flag into a 25-level classification. **Done** — see
+   "Resolved" below. It went into the header table, not `KEYS`.
 2. **`fndrsngEventContriPrevRptAmt`** — a dollar figure on a 990-EZ line.
 3. **`softwareId` / `softwareVersionNum`** — not filing data, but it supports
    work on filing quality and vendor effects, and belongs with `VERSION`.
@@ -1332,6 +1342,92 @@ be made deliberately rather than inferred from whichever route is easiest.
 
 Supporting detail: `EFILE_BUILD_SEPT_2026/attr_analysis/attr_names_by_year.csv`
 and `attr_panel_coverage.csv`.
+
+### Resolved: `F9_00_ORG_EXEMPT_TYPE` in the header table (2026-10-07)
+
+`F9-P00-T00-HEADER` gains one column, `F9_00_ORG_EXEMPT_TYPE`, placed after the
+`F9_00_EXEMPT_STAT_*` checkboxes. Values are `"501c2"`…`"501c29"`, `"4947a1"`,
+`"527"` or NA. It is a string because 4947 and 527 are IRC sections rather than
+501(c) subsections: in one numeric column, sorting and ranges would be
+meaningless and 4947(a)(1) would lose its `(a)(1)`. The values match the
+`TaxStatus` naming in Giving Tuesday's index.
+
+It is computed when the table is built (`add_exempt_type()`, called from
+`build_table()`), from `ATTRIBUTES` and `FLATXML`. **No other table changes.**
+
+**Why not `KEYS`.** It was first written into `get_keys()` (branch
+`keys-501c-subsection`, 2026-09-24) and dropped in favour of the header table:
+
+- In `KEYS`, all 137 tables would gain a column.
+- `get_keys()` runs when the XML is parsed. The v2_3 archives were relabelled,
+  not re-parsed, so the `KEYS` version would have needed a full rebuild from XML.
+- Everything the column needs is already in the archives. Rebuilding one table
+  a year takes about 10 s.
+
+**Three encodings are reconciled.**
+
+- **501(c) other than (3):** the subsection number is an attribute, in two
+  spellings (see above).
+- **501(c)(3):** a checkbox from TY2010 on. TY2009 has no such checkbox, so
+  (c)(3) filers write `3` into the subsection attribute instead. All 39,633
+  literal `3` values in the panel are TY2009, and none of those filings ticks a
+  (c)(3) box. Both spellings map to `"501c3"`. Without that, TY2009 would report
+  39,633 subsection-3 organizations and every later year none.
+- **4947(a)(1) and 527:** checkboxes.
+
+A box counts as ticked when it is present and not an explicit negative. Every
+observed value is `"X"`. Paths are matched on `XPATH2`, and each step accepts an
+`irs:` prefix (EF2-11). If a filing ever carries more than one distinct
+subsection value, all of them are kept, sorted and joined with `;` (for
+example `"501c4;501c6"`), rather than one being picked silently as in EF2-3.
+None has been observed.
+
+**Checked across TY2009–2024 by xpath** (on the `keys-501c-subsection` branch,
+detecting on `XPATH2` so that unmapped and prefixed variants could not hide):
+
+| year | 501(c)(3) | 501(c) other | 4947(a)(1) | >1 selected | 527 |
+|---|---|---|---|---|---|
+| 2009 | — | 48,768 | 13 | 0 | 0 |
+| 2012 | 204,706 | 68,570 | 162 | 0 | 0 |
+| 2018 | 321,182 | 99,495 | 149 | 0 | 0 |
+| 2024 | 351,608 | 104,296 | 266 | 0 | 0 |
+
+No filing selects more than one status in any year, so the order of the `CASE`
+branches never matters. No filing selects 527 in any year. TY2009's 48,768
+includes the 39,633 (c)(3) filers who wrote `3`.
+
+**Verified on the v2_3 archives:**
+
+- **Rebuilt TY2024 and TY2009 headers.** Each was compared with its published
+  v2_3 file using `EXCEPT ALL` in both directions, over every published column.
+  Zero rows differ, and the row counts match (456,170 and 48,781). The only
+  change is the added column.
+- **Every filing is classified.** TY2024: 351,608 `501c3`, 104,296 other
+  501(c), 266 `4947a1`. TY2009: 39,633 `501c3`, 9,135 other 501(c), 13
+  `4947a1`. The derived value agrees with the published checkboxes on every row.
+- **Against `get_keys()`.** The SQL and the branch's `get_keys()` (which reads
+  the XML directly) were run on 159 TY2024 filings: every category, 990 and
+  990-EZ. All 159 agree.
+
+**Rollout.** Published v2_3 tables do not have the column until
+`F9-P00-T00-HEADER` is rebuilt and re-uploaded for each year. No other table is
+affected.
+
+**527 organizations are absent from the source, not filtered out.**
+`F9_00_EXEMPT_STAT_527_X` matches nothing in any year. It is a dead variable, the
+same class as EF2-9. Every `527` element in the filings is one of two things:
+
+- `RelatedOrgSect527OrgInd`: whether the filer is related to a 527 organization.
+- Schedule C's list of 527 organizations the filer paid.
+
+Neither is the filer's own status. Giving Tuesday's index has no `527` form type
+and no `527` `TaxStatus` either.
+
+**990-PF and 990-T are in the data lake but not in this build.**
+`prep_index()` defaults to `form.type = c("990", "990EZ")`, and `split_index()`
+never overrides that default. That leaves out 1,201,201 990-PF filings and
+114,313 990-T filings. This is a decision about what to batch, not a defect.
+990-PF is now built separately as `efilepf_v2_3`.
 
 ---
 
@@ -1618,9 +1714,34 @@ order in which a filer listed its grants.
 
 **Every published table changes.** `TABLE_ID` is a column on every T01+ table,
 and row order changes on all of them. This lands in `efile_v2_3` and
-`efilepf_v2_3` before release, not in a new version. Rolling it out means
-rewriting `FLATXML.TABLE_ID` in the archives (no re-parse needed), then
-rebuilding and re-uploading every table.
+`efilepf_v2_3` before release, not in a new version.
+
+**Rolled out locally (2026-10-07), not yet uploaded.** Scripts and logs are in
+`EFILE_BUILD_SEPT_2026/TID_WORK/`. The builds used a frozen snapshot of this
+branch (`ef2-snapshot/`, commit in `ef2_commit.txt`).
+- `tid_rewrite.R`: rewrites `FLATXML.TABLE_ID` in all 32 v2_3 DuckDBs (16 × 990,
+  16 × PF). It writes a compact copy and swaps it in, rather than updating in place.
+  Each copy is checked against its original: same tables and row counts, same
+  number of distinct IDs, the same sum of their numbers, and no malformed ID.
+  `RELABEL_LOG` gains `table_id_format`.
+- `tid_run.sh` drives the per-year steps:
+  - set the old tables aside in `prev/<set>/<year>/`;
+  - rebuild every table;
+  - verify CSV against Parquet;
+  - recount the PF collisions (identical to the original build in every year);
+  - diff each table against the one it replaces (`tid_diff.R`);
+  - move the new tables into place.
+- The diff compares row multisets with the old `TABLE_ID` rewritten, and counts
+  sort inversions in the new file. Result: 2,192 990 tables and 1,344 PF tables,
+  **0 differ**. Each table holds exactly its old rows and is sorted.
+- `PF_V2_3_WORK/pf_stage.R` hard-coded `'TID-00000'` in the view that joins
+  multi-value variables. It now uses `'TID-000-000-000'`. Both stage scripts load
+  the snapshot instead of the live checkout.
+- One PF file was open in Excel during set-aside and silently failed to move.
+  The driver now checks that set-aside left nothing behind.
+
+Still to do: upload both releases' DuckDBs and tables (and the EF2-16 raw PF
+repairs) and verify them against S3.
 
 **Consumers.** Anything that parses the number out of `TABLE_ID` must strip the
 dashes as well as the prefix. `superstructure`'s `norm_tid()` does
@@ -1630,7 +1751,7 @@ release.
 
 ---
 
-## EF2-17 — the GTDC index omits whole IRS batches
+## EF2-18 — the GTDC index omits whole IRS batches
 
 Found 2026-10-07 while checking how fresh the Giving Tuesday Data Commons (GTDC)
 data lake is.
@@ -1651,8 +1772,6 @@ gaps from missing files.
 | `2025_TEOS_XML_10A` | 9,836 | 0 | 9,836 | not in the index |
 | `2026_TEOS_XML_05A` | 168,344 | 84,172 | 84,172 | half never unpacked |
 | `2026_TEOS_XML_08A` | 50,349 | 0 | 0 | not ingested yet |
-| `2024_TEOS_XML_07A` | 50,144 | 50,144 | 37,950 | 12,194 in the index have no XML file |
-| `2024_TEOS_XML_01A` | 17,246 | 17,246 | 16,458 | 788 in the index have no XML file |
 
 - **2025_09A and 2025_10A:** the IRS posted these on 2025-11-19. GT has the XML
   files, and its index includes later batches (11A–D, 12A), but these two were
@@ -1663,9 +1782,12 @@ gaps from missing files.
   2026-08-25) but was never extracted.
 - **2026_08A:** the IRS posted it 2026-09-16, after GT's last index. This is
   ordinary lag, not a defect; recheck after the next GTDC release.
-- **2024_07A and 2024_01A:** the index lists URLs whose XML files are missing
-  from the listing, so `get_flat_xml()` will fail on them. That puts them in
-  `FAILED_URLS`, but they are not recoverable from GT.
+- **Not a gap: 2024_07A and 2024_01A.** An earlier draft listed 12,194 and 788
+  filings in these batches as indexed but missing their XML files. They are
+  present. Their object IDs start `2022` or `2023`, and the folder listing only
+  covered prefixes 2024–2026. A sample of 10 all return HTTP 206. When checking
+  XML presence by listing, list every prefix a batch's object IDs use, not
+  just the batch's year.
 
 The batches from 2019 to 2024 are otherwise complete: 11 filings in total are
 missing from the GTDC index.
@@ -1684,8 +1806,39 @@ missing from the GTDC index.
 - *"The IRS index lags its zips."* No: `index_2026.csv` covers every zip on the
   IRS download page through 08A.
 
-**Not yet checked:** whether the published `efile_v2_3` archives contain the
-55,481 filings from 2025_09A/10A and the missing half of 2026_05A.
+**Effect on `efile_v2_3` (checked 2026-10-07):** `OBJECTID` was read from
+`KEYS` in all 16 published v2_3 databases over httpfs, 6,007,484 rows in
+total. ef2's `OBJECTID` carries an `OID-` prefix in every table, while the IRS
+and GTDC indices use the bare 18 digits, so strip the prefix for this join.
+
+Every v2_3 filing is in the GTDC full index. The databases contain exactly the
+990/990EZ filings that GT had indexed **up to its 2026-06-04 release**, which
+runs through IRS batch `2026_TEOS_XML_04A`, with `TaxYear` ≤ 2024. Up to that
+point, every indexed filing is present.
+
+Counting 990/990EZ filings in IRS batches that are missing from v2_3, by tax
+year:
+
+| TY | 2025_09A/10A | 2026_05A | 2026_06A/07A | 2026_08A | total | v2_3 rows | missing / v2_3 rows |
+|---|---|---|---|---|---|---|---|
+| 2022 | 570 | 0 | 0 | 4 | 576 | 555,251 | 0.1% |
+| 2023 | 4,411 | 1,142 | 1,021 | 550 | 7,125 | 561,156 | 1.3% |
+| 2024 | 40,582 | 46,515 | 14,334 | 11,282 | **112,715** | 456,170 | **24.7%** |
+
+The tax year is GT's `TaxYear` where the filing is indexed. Otherwise it is
+derived from the IRS `TAX_PERIOD`: the year if the period ends in month 12,
+else the year before.
+
+- **2025_09A/10A (45,567):** these are the index gap above. Every v2_3 rebuild
+  will skip them until GT indexes them or the build stops relying on GT's index.
+- **2026_05A (47,657):** 22,467 are now in the 2026-08-25 index. The rest wait
+  on GT extracting `05B`.
+- **2026_06A/07A (15,355):** these are in the 2026-08-25 index, which came out
+  after v2_3 was built. This is ordinary lag; `update_db()` picks them up.
+- **2026_08A (11,836):** this is lag at GT.
+
+TY2024 is still filling in, so part of its shortfall would close anyway. But
+the 2025_09A/10A part will not close on its own.
 
 **Cheap check to rerun:** compare object IDs in `find_current_index_full()`
 with the IRS index files, grouped by `XML_BATCH_ID`. Any batch whose count in
@@ -1852,6 +2005,51 @@ before the final build:
 
 A mapping error shows up first in this build's collision count. Run that stage
 after any concordance release.
+
+---
+
+## EF2-19 — filings listed twice in the index are built twice
+
+Found 2026-10-07 while rebuilding efile_v2_3 tables (`EFILE_BUILD_SEPT_2026`).
+
+The Giving Tuesday index lists some returns twice. In 2025 GT re-indexed
+TY2019–2022 returns (`IndexedOn` 2025-09-27 and 2025-10-04, new zip files) and
+kept the original 2023-11-19 listings. Both listings have the same `ObjectId`,
+`URL` and `ReturnTs`; the recorded file hash and size differ in all but 89 cases,
+but only one file exists at the URL.
+
+The v2.2 990 builds took the build list straight from the index without
+deduplicating it, so each listing was downloaded and parsed and the filing was
+stored twice: two identical `KEYS` rows and exactly twice its `FLATXML` and
+`ATTRIBUTES` rows. Every published table joins `KEYS`, so those filings repeat
+in every table of those years.
+
+| TY | filings | stored twice |
+|---|---|---|
+| 2019 | 436,317 | 887 |
+| 2020 | 490,208 | 25,473 (5%: `F9-P01-T00-SUMMARY-2020` has 514,471 rows for 489,004 filings) |
+| 2021 | 539,217 | 34 |
+| 2022 | 555,197 | 54 |
+
+In every year the filings stored twice are exactly the ones listed twice; every
+other year has none. Every row of the two copies is identical.
+
+`prep_index()` already drops repeated URLs (`distinct(URL)`) and
+`find_missing_urls()` takes unique URLs, but `build_database(year, urls = ...)`
+and `split_urls()` batch whatever they are given. `merge_duckdbs(skip_existing =
+TRUE)` (EF2-14) keeps a filing out of a second shard, but not two copies inside
+one shard.
+
+**Fixed (branch `dedupe-guard`).**
+- `dedupe_urls()` drops repeated filings by ObjectId (also catching one return
+  under two URL forms) and reports how many; `build_database()` applies it to
+  `urls` before batching.
+- `check_unique_keys()` stops after the merge if `KEYS` holds any `OBJECTID`
+  more than once.
+
+The efile_v2_3 databases for TY2019–2022 were deduplicated in place on
+2026-10-07 (second copy removed, `DEDUP_LOG` table in each); their tables and
+the S3 copies still need a rebuild and upload.
 
 ---
 

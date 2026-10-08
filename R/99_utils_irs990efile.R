@@ -526,6 +526,195 @@ get_table_headers <- function(){
   c("//IRS990ScheduleR/Form990ScheduleRPartVII", "//IRS990ScheduleR/SupplementalInformationDetail"
   )
 
+  ## 990-PF one-to-many tables. Paths are the repeating group (or, for the
+  ## fixed-slot Part IX-A/IX-B tables and the flat T25 statement, the
+  ## container) across pre-2013 and 2013+ schema names. Derived from the v1
+  ## PF concordance (F990-PF-FULL.CSV) rdb_relationship == "MANY".
+
+  TABLE.HEADERS$'PF-P04-T01-INVEST-INCOME-TAX-CAPITAL-GAINLOSS' <-
+  c("//CapGainsLossTxInvstIncmDetail/CapGainsLossTxInvstIncmGrp",
+  "//CapitalGainsAndLosses/CapitalGainsAndLossesInfo")
+
+  TABLE.HEADERS$'PF-P08-T01-COMPENSATION' <-
+  c("//OfcrDirTrusteesKeyEmployeeInfo/OfcrDirTrusteesOrKeyEmployee",
+  "//OfficerDirTrstKeyEmplInfoGrp/OfficerDirTrstKeyEmplGrp")
+
+  TABLE.HEADERS$'PF-P08-T02-COMPENSATION-HIGHEST' <-
+  c("//OfcrDirTrusteesKeyEmployeeInfo/CompensationOfHighestPaidEmpl",
+  "//OfficerDirTrstKeyEmplInfoGrp/CompensationHighestPaidEmplGrp")
+
+  TABLE.HEADERS$'PF-P08-T03-COMPENSATION-CONTRACTORS' <-
+  c("//OfcrDirTrusteesKeyEmployeeInfo/CompensationOfHghstPaidCntrct",
+  "//OfficerDirTrstKeyEmplInfoGrp/CompensationOfHghstPdCntrctGrp")
+
+  TABLE.HEADERS$'PF-P09-T01-CHARITABLE-ACTIVITIES' <-
+  c("//IRS990PF/SummaryOfDirectCharitableActy", "//IRS990PF/SummaryOfDirectChrtblActyGrp")
+
+  TABLE.HEADERS$'PF-P09-T02-PROG-RELATED-INVESTMENTS' <-
+  c("//IRS990PF/SumOfProgramRelatedInvestments", "//IRS990PF/SumOfProgramRelatedInvstGrp")
+
+  TABLE.HEADERS$'PF-P15-T01-SUPPLEMENTARY-INFO-GRANT-PAID' <-
+  c("//SupplementaryInfomation/GrantOrContriPaidDuringYear",
+  "//SupplementaryInformation/GrantOrContriPaidDuringYear",
+  "//SupplementaryInformationGrp/GrantOrContributionPdDurYrGrp")
+
+  TABLE.HEADERS$'PF-P15-T02-SUPPLEMENTARY-INFO-GRANT-FUTURE' <-
+  c("//SupplementaryInfomation/GrantOrContriApprovedForFuture",
+  "//SupplementaryInformation/GrantOrContriApprovedForFuture",
+  "//SupplementaryInformationGrp/GrantOrContriApprvForFutGrp")
+
+  TABLE.HEADERS$'PF-P16-T01-INCOME-PRODUCING-ACTS' <-
+  c("//AnalysisIncomeProducingActy/ProgramServiceRevenuePartVII",
+  "//AnalysisIncomeProducingActyGrp/ProgramServiceRevPartVIIGrp")
+
+  TABLE.HEADERS$'PF-P16-T02-INCOME-PRODUCING-ACTS' <-
+  c("//AnalysisIncomeProducingActy/OtherRevenueDescribed",
+  "//AnalysisIncomeProducingActyGrp/OtherRevenueDescribedGrp")
+
+  TABLE.HEADERS$'PF-P16-T03-ACTS-RELATIONSHIP-EXEMPT-PURPOSE' <-
+  c("//RlnOfActyToAccomOfExemptPrps/RlnOfActyToAccomOfExemptPrps",
+  "//RlnOfActyToAccomOfExmptPrpsGrp/RlnOfActyToAccomOfExmptPrpsGrp")
+
+  TABLE.HEADERS$'PF-P17-T01-TRANSFERS-TRANSACTIONS' <-
+  c("//TrnsfrTransRlnNonchrtblEOGrp/TransferScheduleDetail",
+  "//TrnsfrTrRlnWithNoncharitableEO/TransferSchedule")
+
+  TABLE.HEADERS$'PF-P17-T02-RELATIONSHIPS' <-
+  c("//TrnsfrTransRlnNonchrtblEOGrp/RelationshipScheduleDetail",
+  "//TrnsfrTrRlnWithNoncharitableEO/RelationshipSchedule")
+
+  TABLE.HEADERS$'PF-P99-T01-ACC-FEES' <-
+  c("//AccountingFeesSchedule/AccountingFees", "//AccountingFeesSchedule/AccountingFeesDetail")
+
+  TABLE.HEADERS$'PF-P99-T03-PROG-INVEST-OTH' <-
+  c("//AllOthProgRltdInvestmentsSch/AllOtherProgramRelatedInvstGrp",
+  "//AllOthProgRltdInvestmentsSch/AllOthProgRltdInvestments")
+
+  TABLE.HEADERS$'PF-P99-T04-AMORTIZATION' <-
+  c("//AmortizationSchedule/Amortization", "//AmortizationSchedule/AmortizationScheduleDetail")
+
+  TABLE.HEADERS$'PF-P99-T06-FUND-BORROWED' <-
+  c("//BorrowedFundsElection/BorrowedFunds", "//BorrowedFundsElection/BorrowedFundsGrp")
+
+  TABLE.HEADERS$'PF-P99-T09-COMP' <-
+  c("//CompensationExplanation/Compensation", "//CompensationExplanation/CompensationExplanationGrp")
+
+  TABLE.HEADERS$'PF-P99-T10-COMP-KONTR' <-
+  c("//ContractorCompensationExpln/ContractorCompExplanation",
+  "//ContractorCompensationExpln/ContractorCompExplnGrp")
+
+  TABLE.HEADERS$'PF-P99-T11-DEPREC' <-
+  c("//DepreciationSchedule/Depreciation", "//DepreciationSchedule/DepreciationPropertyGrp")
+
+  TABLE.HEADERS$'PF-P99-T12-DISSOLUTION' <-
+  c("//DissolutionStmt/DissolutionInfo", "//DissolutionStmt/DissolutionInformationGrp")
+
+  TABLE.HEADERS$'PF-P99-T14-COMP-EMPL' <-
+  c("//EmployeeCompensationExpln/EmployeeCompExplanation",
+  "//EmployeeCompensationExpln/EmployeeCompExplanationGrp")
+
+  TABLE.HEADERS$'PF-P99-T16-EXP-RESPONSIBILITY' <-
+  c("//ExpenditureResponsibilityStmt/ExpenditureResponsibility",
+  "//ExpenditureResponsibilityStmt/ExpenditureResponsibilityGrp")
+
+  TABLE.HEADERS$'PF-P99-T19-SALE-NONPUB-SEC' <-
+  c("//GainLossSaleNonpublicSecSch/GainLossSaleNonpublicSecurity")
+
+  TABLE.HEADERS$'PF-P99-T20-SALE-OTH-ASSET' <-
+  c("//GainLossSaleOtherAssetsSch/GainLossSaleOtherAsset",
+  "//GainLossSaleOtherAssetsSch/GainLossSaleOtherAssetGrp")
+
+  TABLE.HEADERS$'PF-P99-T21-SALE-PUB-SEC' <-
+  c("//GainLossSalePublicSecSch/GainLossSalePublicSecurity")
+
+  TABLE.HEADERS$'PF-P99-T22-SUPPLEMENTAL-INFO' <-
+  c("//GeneralExplanationAttachment/GeneralExplanation",
+  "//GeneralExplanationAttachment/GeneralExplanationGrp")
+
+  TABLE.HEADERS$'PF-P99-T23-INVEST-CORP-BOND' <-
+  c("//InvestmentsCorpBondsSchedule/InvestmentsCorpBonds",
+  "//InvestmentsCorpBondsSchedule/InvestmentsCorporateBondsGrp")
+
+  TABLE.HEADERS$'PF-P99-T24-INVEST-CORP-STOCK' <-
+  c("//InvestmentsCorpStockSchedule/InvestmentsCorporateStockGrp",
+  "//InvestmentsCorpStockSchedule/InvestmentsCorpStock")
+
+  TABLE.HEADERS$'PF-P99-T25-INVEST-GOVT-SEC' <-
+  c("//ReturnData/InvestmentsGovtObligationsSch")
+
+  TABLE.HEADERS$'PF-P99-T26-INVEST-LAND' <-
+  c("//InvestmentsLandSchedule2/InvestmentLand", "//InvestmentsLandSchedule2/InvestmentLandGrp")
+
+  TABLE.HEADERS$'PF-P99-T27-INVEST-OTH' <-
+  c("//InvestmentsOtherSchedule2/InvestmentsOther", "//InvestmentsOtherSchedule2/InvestmentsOtherGrp")
+
+  TABLE.HEADERS$'PF-P99-T28-LAND-ETC' <-
+  c("//LandEtcSchedule2/LandEtc", "//LandEtcSchedule2/LandEtcGrp")
+
+  TABLE.HEADERS$'PF-P99-T29-LEGAL-FEES' <-
+  c("//LegalFeesSchedule/LegalFees", "//LegalFeesSchedule/LegalFeesGrp")
+
+  TABLE.HEADERS$'PF-P99-T31-LOAN-OFF' <-
+  c("//LoansFromOfficersSchedule/LoansFromOfficer", "//LoansFromOfficersSchedule/LoansFromOfficerGrp")
+
+  TABLE.HEADERS$'PF-P99-T32-MTG-NOTE' <-
+  c("//MortgagesAndNotesPayableSch/NotePayable", "//MortgagesAndNotesPayableSch/NotePayableGrp")
+
+  TABLE.HEADERS$'PF-P99-T33-ASSET-OTH' <-
+  c("//OtherAssetsSchedule/OtherAssets", "//OtherAssetsSchedule/OtherAssetsScheduleGrp")
+
+  TABLE.HEADERS$'PF-P99-T34-NETASSET-CHANGE' <-
+  c("//OtherChangesInNetAssetsSch/OtherChangesInNetAsset")
+
+  TABLE.HEADERS$'PF-P99-T35-DECREASE-OTH' <-
+  c("//OtherDecreasesSchedule/OtherDecreases", "//OtherDecreasesSchedule/OtherDecreasesDetail")
+
+  TABLE.HEADERS$'PF-P99-T36-EXP-OTH' <-
+  c("//OtherExpensesSchedule/OtherExpenses", "//OtherExpensesSchedule/OtherExpensesScheduleGrp")
+
+  TABLE.HEADERS$'PF-P99-T37-INCOME-OTH' <-
+  c("//OtherIncomeSchedule2/OtherIncome", "//OtherIncomeSchedule2/OtherIncomeDetail")
+
+  TABLE.HEADERS$'PF-P99-T38-INCREASE-OTH' <-
+  c("//OtherIncreasesSchedule/OtherIncreases", "//OtherIncreasesSchedule/OtherIncreasesDetail")
+
+  TABLE.HEADERS$'PF-P99-T39-LIAB-OTH' <-
+  c("//OtherLiabilitiesSchedule/OtherLiabilities", "//OtherLiabilitiesSchedule/OtherLiabilitiesDetail")
+
+  TABLE.HEADERS$'PF-P99-T40-NOTE-LOAN-OTH-LONG' <-
+  c("//OtherNotesLoansRcvblLongSch/OtherNotesLoansRcvblLong",
+  "//OtherNotesLoansRcvblLongSch/OtherNotesLoansRcvblLongGrp")
+
+  TABLE.HEADERS$'PF-P99-T41-NOTE-LOAN-OTH-SHORT' <-
+  c("//OtherNotesLoansRcvblShortSch2/OtherNotesLoansRcvblShort",
+  "//OtherNotesLoansRcvblShortSch2/OtherNotesLoansRcvblShortGrp")
+
+  TABLE.HEADERS$'PF-P99-T42-PROF-FEES-OTH' <-
+  c("//OtherProfessionalFeesSchedule/OtherProfessionalFees",
+  "//OtherProfessionalFeesSchedule/OtherProfessionalFeesDetail")
+
+  TABLE.HEADERS$'PF-P99-T43-OFF-OTH' <-
+  c("//OtherReceivablesOfficersSch/OfficerOtherRcvblGrp",
+  "//OtherReceivablesOfficersSch/OtherReceivablesOfficer")
+
+  TABLE.HEADERS$'PF-P99-T46-SALE-INV' <-
+  c("//SalesOfInventoryList/InventorySaleGrp", "//SalesOfInventoryList/SaleOfInventory")
+
+  TABLE.HEADERS$'PF-P99-T48-CONTRIBUTOR' <-
+  c("//SubstantialContributorsSch/SubstantialContributor",
+  "//SubstantialContributorsSch/SubstantialContributorDetail")
+
+  TABLE.HEADERS$'PF-P99-T49-TAXES' <-
+  c("//TaxesSchedule/Taxes", "//TaxesSchedule/TaxesDetail")
+
+  TABLE.HEADERS$'PF-P99-T51-TRANSFER-FROM-CE' <-
+  c("//TransfersFrmControlledEntities/FromControlledEntity",
+  "//TransfersFrmControlledEntities/TransfersFromControlledEntGrp")
+
+  TABLE.HEADERS$'PF-P99-T52-TRANSFER-TO-CE' <-
+  c("//TransfersToControlledEntities/ToControlledEntity",
+  "//TransfersToControlledEntities/TransfersToControlledEntGrp")
+
   return( TABLE.HEADERS )
 
 }
