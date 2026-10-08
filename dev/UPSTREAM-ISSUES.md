@@ -1844,14 +1844,109 @@ the 2025_09A/10A part will not close on its own.
 with the IRS index files, grouped by `XML_BATCH_ID`. Any batch whose count in
 the GTDC index is below its IRS count is a gap. Run it before an update.
 
-**Workaround:** use the IRS index as the list of filings, not the GTDC index.
-The XML files for the 2025_09A/10A filings are reachable at
-`https://gt990datalake-rawdata.s3.us-east-1.amazonaws.com/EfileData/XmlFiles/<OBJECT_ID>_public.xml`.
-The missing half of 2026_05A and the 2026_08A batch have to come from the IRS
-zips until GT ingests them.
-
 **Report upstream:** the 2025_09A/10A index gap and the unextracted `05B` zip
 belong to GTDC.
+
+### The patch: `xml2/v2_3_patch/` (2026-10-08)
+
+Rather than wait for GTDC, the missing filings are re-hosted on NCCS and merged
+into the build index. `R/12_patch_index.R` (#16) does this:
+
+```r
+irs   <- get_irs_index( 2019:2026 )              # 990, 990EZ, 990PF
+gt    <- get_current_index_full()
+miss  <- diff_irs_gt( irs, gt )
+got   <- fetch_irs_xml( miss, dest = "v2_3_patch" )
+patch <- build_patch_index( miss, got, dest = "v2_3_patch", build = "v2_3" )
+upload_patch( "v2_3_patch", build = "v2_3", dry_run = FALSE )
+index <- combine_index( gt, patch )              # one row per filing; GTDC rows win
+```
+
+**Contents.** It compares the IRS indices for 2019–2026 with the GTDC full index
+of 2026-08-25. That leaves 184,171 IRS 990/990EZ/990PF filings missing from
+GTDC, and **184,165** of them are re-hosted at:
+
+```
+https://nccs-efile.s3.us-east-1.amazonaws.com/xml2/v2_3_patch/<OBJECT_ID>_public.xml
+https://nccs-efile.s3.us-east-1.amazonaws.com/xml2/v2_3_patch/PATCH-INDEX-v2_3-2026-10-07.csv
+```
+
+The 6 not re-hosted are rows from index years before 2024. Those years have no
+`XML_BATCH_ID`, so the filings cannot be mapped to a zip.
+
+| TY | 990 | 990EZ | 990PF |
+|---|---|---|---|
+| 2021 | 1 | 0 | 0 |
+| 2022 | 334 | 240 | 95 |
+| 2023 | 3,639 | 1,832 | 1,036 |
+| 2024 | 54,843 | 21,488 | 9,517 |
+| 2025 | 37,068 | 31,036 | 23,026 |
+
+The patch index has the IRS index columns, plus `ObjectId`, `URL`, `TaxYear`
+and `FormType` in GTDC form. `TaxYear` is read from each file's `TaxYr`, the
+field `get_keys()` uses. The upload was verified on S3:
+
+- 184,166 objects, every size matches the local copy;
+- a random 25, fetched back from their public URLs, are byte-identical.
+
+**Things that bit, now handled in the code:**
+
+- **Batches span zips.** The IRS index labels both halves of May 2026
+  `2026_TEOS_XML_05A`, but the second half is in `05B.zip`.
+  `match_batch_zips()` matches on the `YYYY_TEOS_XML_MM` stem.
+- **Some zips have a damaged index.** These include 2024_05A, 2024_11A, 2025_05A,
+  2026_05A and 2026_05B, all zip64 with large entry counts. R's `unzip()`, the
+  `zip` package and `bsdtar` reading by index all reject them.
+- **2026_05B is Deflate64 (method 9).** Streaming it through `bsdtar` writes
+  **zero-filled files and reports success**; 81,451 files came out as zeros.
+  Info-ZIP `unzip` (6.00, shipped with Git for Windows) reads Deflate64 despite
+  warning about the entry count. `extract_zip_files()` therefore tries `zip`,
+  then Info-ZIP `unzip`, then `bsdtar`, and keeps only files that pass
+  `is_xml_file()`. `upload_patch()` refuses any file that fails that check.
+- **Object IDs from URLs.** `get_object_id()` used to delete fixed URL prefixes,
+  so a patch URL would have produced `OID-https://…`. It now reads the file
+  name.
+- **Matching filings.** `find_missing_urls()` used to match on URL, so a patch
+  filing would have been added again once GTDC indexed it. It now matches on
+  `OBJECTID`.
+
+Local files, logs and scripts are in
+`C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026/V2_3_PATCH/`.
+
+### Applied in `efile_v3_1` / `efilepf_v3_1` (in progress)
+
+v3_1 is the first release built from `combine_index(gt, patch)`. Work is in
+`C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026/V3_1_WORK/`.
+
+1. **Relabel (done 2026-10-08).** All 32 v2_3 archives (990 and PF, TY2009–2024)
+   were copied to `DUCKDB_V3_1/` and `DUCKDB_PF_V3_1/`. They were relabelled
+   to concordance990 `02de916` (2.0.1, the same data as `02de916`), from a
+   frozen snapshot (`concordance_v2_F990.csv`, `concordance_v2_F990PF.csv`).
+   - **990:** 59 newly mapped xpaths, 52 of them on Schedule B. 187 xpaths
+     move between tables:
+     - SH-P99 T00→T01 (89);
+     - SG-P02 T01→T00 (86);
+     - SD-P07 equity and derivatives T01→T00 (12).
+   - **PF:** 26 xpaths move to PF-P09 T00. `multi_value` changes on 6 xpaths.
+   - **Checks:** every archive passed the zero-off-label check. Each
+     `RELABEL_LOG` keeps its v2_3 row and gains a v3_1 row. No variable was
+     renamed.
+2. **Update (running).** Builds TY2025 from GTDC, then adds every filing in the
+   combined index that each archive lacks, in place. This uses
+   `update_db(source_db = <local file>, ccf = <v3_1 concordance>)`. Planned
+   additions:
+
+   | | 990/990EZ | 990-PF |
+   |---|---|---|
+   | TY2025 new build | 138,497 GTDC + 68,104 patch | 44,499 GTDC + 23,026 patch |
+   | TY2009–2024 updates | 120,199 (TY2021–2024) | 15,946 (TY2016–2019, 2022–2024) |
+
+   The PF TY2016–2019 additions are 5,298 GTDC-indexed filings that the
+   September PF build missed; the patch is not involved. Each archive gets an
+   `UPDATE_LOG` table: filings before and after, the index used, the
+   concordance, and zero-off-label and duplicate-`OBJECTID` checks.
+3. **Tables.** Not built yet. They will be rebuilt from the updated archives
+   with the merged ef2 (#16, plus EF2-12, EF2-19 and PF headers from #17–#20).
 
 ---
 

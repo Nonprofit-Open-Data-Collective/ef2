@@ -151,6 +151,32 @@ indices from `XPATH2` (EF2-16). Scripts and logs are in
 `C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026/PF_V2_3_WORK/`, and the record is
 in `dev/UPSTREAM-ISSUES.md` under "efilepf_v2_3".
 
+### Next release: `efile_v3_1` / `efilepf_v3_1` (in progress)
+
+v3_1 adds filings that the GTDC index never listed, and a TY2025 archive. The
+record is in `dev/UPSTREAM-ISSUES.md` under EF2-18.
+
+- **Patch.** 184,165 IRS-indexed 990/990EZ/990PF filings were missing from the
+  GTDC index of 2026-08-25. They are re-hosted at
+  `https://nccs-efile.s3.us-east-1.amazonaws.com/xml2/v2_3_patch/<OBJECT_ID>_public.xml`,
+  with `PATCH-INDEX-v2_3-2026-10-07.csv` beside them. They were built with
+  `R/12_patch_index.R`. Use `combine_index(gt, patch)` as the build index; it
+  keeps GTDC rows where a filing is in both.
+- **Labels.** v3_1 follows concordance990 `02de916` (2.0.1), frozen in
+  `V3_1_WORK/concordance_v2_F990*.csv`. Relabelling from v2_3 moves 187 990
+  xpaths and 26 PF xpaths between tables, and newly maps 59 + 7 xpaths. No
+  variable is renamed.
+- **Updating a local archive.** Use
+  `update_db(year, index, source_db = "<path>.duckdb", ccf = <concordance>)`.
+  It finds missing filings by `OBJECTID`, builds them with that concordance,
+  and appends in place. Pass the release's concordance: `build_database()`
+  otherwise falls back to the v1 master concordance.
+- **Status.** The archives are local only, in `DUCKDB_V3_1/` and
+  `DUCKDB_PF_V3_1/`. The relabel is done, the update was running on
+  2026-10-08, and the tables are not built. Nothing is published under v3_1
+  yet. When it is, expect `duckdb/efile_v3_1/`, `duckpf/efilepf_v3_1/`, and
+  `public/efile[pf]_v3_1/`.
+
 ## Consumers
 
 `superstructure` (`../superstructure`) reads the `efile_v2_2` CSV tables and
