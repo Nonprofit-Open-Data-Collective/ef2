@@ -10,8 +10,9 @@ read_return_headers(files)
 \item{files}{Character vector of local XML file paths.}
 }
 \value{
-A \code{data.frame} with \code{OBJECT_ID}, \code{TaxYear}, \code{FormType}, \code{ReturnTs},
-\code{TaxPeriodBeginDate}, \code{TaxPeriodEndDate}, and \code{ReturnVersion}.
+A \code{data.table} with \code{OBJECT_ID}, \code{TaxYear}, \code{FormType}, \code{ReturnTs},
+\code{TaxPeriodBeginDate}, \code{TaxPeriodEndDate}, \code{ReturnVersion}, and
+\code{READ_ERROR}.
 }
 \description{
 Reads the fields a build index needs from each file's
@@ -20,4 +21,8 @@ Reads the fields a build index needs from each file's
 \details{
 \code{TaxYear} is \code{TaxYr} (or \code{TaxYear} in older schemas). When neither
 is present it falls back to the year of \code{TaxPeriodBeginDt}.
+
+A file that cannot be parsed gets a row with \code{NA} fields and
+\code{READ_ERROR} set to the parser's message, so one bad file does not stop a
+run of thousands.
 }

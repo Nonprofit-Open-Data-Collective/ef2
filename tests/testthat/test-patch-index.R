@@ -81,3 +81,34 @@ test_that("fetch_irs_xml() takes each batch from its own zips and resumes from i
   expect_setequal(got2$OBJECT_ID, c("111", "222"))
   expect_equal(unique(got2$ZIP_FILE), "2026_TEOS_XML_05B")
 })
+
+test_that("is_xml_file() rejects zero-filled and blank files, accepts BOM-prefixed XML", {
+  d <- tempfile("isx"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  writeBin(as.raw(rep(0, 5000)), file.path(d, "zero.xml"))
+  writeBin(raw(0), file.path(d, "empty.xml"))
+  writeBin(c(as.raw(c(0xef, 0xbb, 0xbf)), charToRaw('<?xml version="1.0"?><Return/>')), file.path(d, "bom.xml"))
+  writeLines("  \n<Return/>", file.path(d, "ws.xml"))
+  expect_false(is_xml_file(file.path(d, "zero.xml")))
+  expect_false(is_xml_file(file.path(d, "empty.xml")))
+  expect_false(is_xml_file(file.path(d, "missing.xml")))
+  expect_true(is_xml_file(file.path(d, "bom.xml")))
+  expect_true(is_xml_file(file.path(d, "ws.xml")))
+})
+
+test_that("fetch_irs_xml() re-fetches files an earlier run extracted as zeros", {
+  root <- tempfile("refetch"); dir.create(root); on.exit(unlink(root, recursive = TRUE))
+  src <- file.path(root, "src"); dir.create(src)
+  writeLines("<Return/>", file.path(src, "111_public.xml"))
+  zdir <- file.path(root, "zips"); dir.create(zdir)
+  zip::zip(file.path(zdir, "2026_TEOS_XML_05B.zip"), files = "111_public.xml", root = src)
+  zips <- data.frame(year = 2026, zip = "2026_TEOS_XML_05B", url = "unused", stringsAsFactors = FALSE)
+  miss <- data.table::data.table(OBJECT_ID = "111", XML_BATCH_ID = "2026_TEOS_XML_05A")
+  dest <- file.path(root, "dest"); dir.create(dest)
+  # Simulate the bsdtar/Deflate64 failure: a zero-filled file already recorded in the manifest.
+  writeBin(as.raw(rep(0, 100)), file.path(dest, "111_public.xml"))
+  write.csv(data.frame(FILE = "111_public.xml", ZIP_FILE = "2026_TEOS_XML_05B"),
+            file.path(dest, "FETCH-MANIFEST.csv"), row.names = FALSE)
+  got <- suppressMessages(fetch_irs_xml(miss, dest, zips = zips, zip_dir = zdir, keep_zips = TRUE))
+  expect_equal(got$OBJECT_ID, "111")
+  expect_true(is_xml_file(file.path(dest, "111_public.xml")))
+})

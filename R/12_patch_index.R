@@ -186,6 +186,15 @@ fetch_irs_xml <- function( miss, dest, zips = NULL, zip_dir = tempdir(), keep_zi
     data.frame( FILE = character(0), ZIP_FILE = character(0) )
   }
   manifest <- manifest[ manifest$FILE %in% list.files(dest), , drop = FALSE ]
+  # Drop (and delete) files an earlier run extracted badly, so they are fetched
+  # again rather than published.
+  valid <- vapply( file.path( dest, manifest$FILE ), is_xml_file, logical(1) )
+  if ( any( ! valid ) ) {
+    message( sum( ! valid ), " previously extracted files are not valid XML; re-fetching them." )
+    unlink( file.path( dest, manifest$FILE[ ! valid ] ) )
+    manifest <- manifest[ valid, , drop = FALSE ]
+    utils::write.csv( manifest, manifest_file, row.names = FALSE )
+  }
   found <- list( manifest )
 
   for ( i in seq_len( nrow(todo) ) ) {
@@ -199,17 +208,10 @@ fetch_irs_xml <- function( miss, dest, zips = NULL, zip_dir = tempdir(), keep_zi
       message( "Downloading ", todo$url[i] )
       curl::curl_download( todo$url[i], zf, quiet = TRUE )
     }
-    contents <- tryCatch( zip::zip_list( zf )$filename, error = function(e) NULL )
-    if ( ! is.null(contents) ) {
-      hit <- contents[ basename(contents) %in% need ]
-      if ( length(hit) > 0 ) {
-        zip::unzip( zf, files = hit, exdir = dest, junkpaths = TRUE )
-      }
-      msg <- paste( length(hit), "of", length(contents), "files extracted" )
-    } else {
-      hit <- stream_unzip( zf, need, dest )
-      msg <- paste( length(hit), "files extracted (streamed: damaged zip index)" )
-    }
+    ex  <- extract_zip_files( zf, need, dest )
+    hit <- ex$files
+    msg <- paste0( length(hit), " of ", length(need), " wanted files extracted (",
+                   if ( nzchar(ex$method) ) ex$method else "none", ")" )
     if ( length(hit) > 0 ) {
       new <- data.frame( FILE = basename(hit), ZIP_FILE = todo$zip[i], stringsAsFactors = FALSE )
       found[[ todo$zip[i] ]] <- new
@@ -232,13 +234,107 @@ fetch_irs_xml <- function( miss, dest, zips = NULL, zip_dir = tempdir(), keep_zi
 }
 
 
+#' @title Is a file an XML document (and not blank or zero-filled)?
+#' @param path Path to a file.
+#' @return `TRUE` if the first non-BOM, non-whitespace byte is `<`.
+#' @keywords internal
+is_xml_file <- function( path ) {
+  if ( ! file.exists(path) ) { return(FALSE) }
+  b <- readBin( path, "raw", 256 )
+  if ( length(b) >= 3 && identical( b[1:3], as.raw( c(0xef,0xbb,0xbf) ) ) ) { b <- b[-(1:3)] }
+  b <- b[ ! b %in% as.raw( c(0x20,0x09,0x0a,0x0d) ) ]
+  length(b) > 0 && b[1] == as.raw(0x3c)
+}
+
+
+#' @title Extract named files from an IRS zip, trying several extractors
+#'
+#' @description IRS zips defeat any single extractor:
+#'
+#'  * `zip` (miniz) reads ordinary zips. It cannot read the large zip64
+#'    archives (e.g. `2024_TEOS_XML_05A.zip`, 156,237 entries), and it cannot
+#'    read **Deflate64** (method 9), which `2026_TEOS_XML_05B.zip` uses.
+#'  * Info-ZIP `unzip` reads Deflate64. It warns about the zip64 entry count
+#'    but extracts correctly.
+#'  * `bsdtar` in streaming mode reads damaged-index zips that use ordinary
+#'    Deflate. On Deflate64 it **writes zero-filled files without failing**.
+#'
+#'  So each extractor's output is checked with [is_xml_file()], and files
+#'  that fail are passed to the next one. Only valid files reach `dest`.
+#'
+#' @param zf Path to the zip.
+#' @param files File names (no folder) wanted.
+#' @param dest Destination folder.
+#' @return A list: `files` (the names extracted) and `method` (the
+#'  extractors that contributed, joined with `+`).
+#' @keywords internal
+extract_zip_files <- function( zf, files, dest ) {
+  listed <- NULL
+  methods <- list(
+    zip = function( out ) {
+      contents <- zip::zip_list( zf )$filename
+      listed <<- basename( contents )
+      hit <- contents[ basename(contents) %in% files ]
+      if ( length(hit) > 0 ) { zip::unzip( zf, files = hit, exdir = out, junkpaths = TRUE ) }
+    },
+    unzip  = function( out ) info_unzip( zf, files, out ),
+    bsdtar = function( out ) stream_unzip( zf, files, out ) )
+
+  left <- files
+  used <- character(0)
+  for ( m in names(methods) ) {
+    if ( length(left) == 0 ) { break }
+    out <- tempfile( "x" ); dir.create( out )
+    ok  <- tryCatch( { methods[[m]]( out ); TRUE }, error = function(e) FALSE )
+    # When the zip's index could be read, files it does not list are not in
+    # it, so there is no point trying the slower extractors for them.
+    if ( ! is.null(listed) ) { left <- intersect( left, listed ) }
+    if ( ok ) {
+      cand <- list.files( out, pattern = "_public\\.xml$", recursive = TRUE, full.names = TRUE )
+      cand <- cand[ basename(cand) %in% left ]
+      cand <- cand[ vapply( cand, is_xml_file, logical(1) ) ]
+      if ( length(cand) > 0 ) {
+        file.copy( cand, file.path( dest, basename(cand) ), overwrite = TRUE )
+        left <- setdiff( left, basename(cand) )
+        used <- c( used, m )
+      }
+    }
+    unlink( out, recursive = TRUE )
+  }
+  got <- setdiff( files, left )
+  got <- got[ file.exists( file.path( dest, got ) ) ]
+  list( files = got, method = paste( used, collapse = "+" ) )
+}
+
+
+#' @title Extract files with Info-ZIP unzip
+#' @description Used by [extract_zip_files()] for Deflate64 zips. Up to 200
+#'  names are passed as patterns; above that the whole zip is extracted (into a
+#'  temporary folder) and the caller keeps what it needs.
+#' @param zf Path to the zip.
+#' @param files File names (no folder) wanted.
+#' @param out Folder to extract into (flattened).
+#' @keywords internal
+info_unzip <- function( zf, files, out ) {
+  uz <- Sys.which( "unzip" )
+  if ( ! nzchar(uz) ) { stop( "Info-ZIP unzip not found on PATH." ) }
+  pats <- if ( length(files) <= 200 ) shQuote( paste0( "*", files ) ) else character(0)
+  # unzip exits non-zero on the zip64 entry-count warning; output is validated
+  # by the caller instead.
+  suppressWarnings( system2( uz, c( "-o", "-j", "-qq", shQuote(zf), pats, "-d", shQuote(out) ),
+                             stdout = FALSE, stderr = FALSE ) )
+  invisible( NULL )
+}
+
+
 #' @title Extract files from a zip whose central directory is damaged
 #'
-#' @description Some IRS zips cannot be opened by index: `2024_TEOS_XML_05A.zip`
-#'  (156,237 entries, zip64) fails in [utils::unzip()], [zip::zip_list()], and
-#'  Info-ZIP `unzip` alike. Reading it front to back from the local file
-#'  headers works, so the zip is piped through libarchive's `bsdtar` in
-#'  streaming mode and only the wanted files are extracted.
+#' @description Last resort in [extract_zip_files()]. Some IRS zips cannot be
+#'  opened by index; reading them front to back from the local file headers
+#'  works for entries compressed with ordinary Deflate. The zip is piped through
+#'  libarchive's `bsdtar` in streaming mode and only the wanted files are
+#'  extracted. **On Deflate64 entries bsdtar writes zero-filled files**, which
+#'  is why the caller validates the output.
 #'
 #' @details Needs `bsdtar`. It ships with Windows 10+ as
 #'  `%SystemRoot%\System32\tar.exe`, and with macOS as `tar`. GNU tar cannot read
@@ -297,13 +393,25 @@ stream_unzip <- function( zf, files, dest ) {
 #' @details `TaxYear` is `TaxYr` (or `TaxYear` in older schemas). When neither
 #'  is present it falls back to the year of `TaxPeriodBeginDt`.
 #'
+#'  A file that cannot be parsed gets a row with `NA` fields and
+#'  `READ_ERROR` set to the parser's message, so one bad file does not stop a
+#'  run of thousands.
+#'
 #' @param files Character vector of local XML file paths.
-#' @return A `data.frame` with `OBJECT_ID`, `TaxYear`, `FormType`, `ReturnTs`,
-#'  `TaxPeriodBeginDate`, `TaxPeriodEndDate`, and `ReturnVersion`.
+#' @return A `data.table` with `OBJECT_ID`, `TaxYear`, `FormType`, `ReturnTs`,
+#'  `TaxPeriodBeginDate`, `TaxPeriodEndDate`, `ReturnVersion`, and
+#'  `READ_ERROR`.
 #' @export
 read_return_headers <- function( files ) {
   one <- function( f ) {
-    doc <- xml2::read_xml( f )
+    oid <- sub( "_public\\.xml$", "", basename(f) )
+    doc <- tryCatch( xml2::read_xml( f ), error = function(e) conditionMessage(e) )
+    if ( is.character(doc) ) {
+      return( list( OBJECT_ID = oid, TaxYear = NA_character_, FormType = NA_character_,
+                    ReturnTs = NA_character_, TaxPeriodBeginDate = NA_character_,
+                    TaxPeriodEndDate = NA_character_, ReturnVersion = NA_character_,
+                    READ_ERROR = doc ) )
+    }
     xml2::xml_ns_strip( doc )
     get <- function( xp ) {
       node <- xml2::xml_find_first( doc, xp )
@@ -312,17 +420,20 @@ read_return_headers <- function( files ) {
     begin <- get( "/Return/ReturnHeader/TaxPeriodBeginDt|/Return/ReturnHeader/TaxPeriodBeginDate" )
     ty    <- get( "/Return/ReturnHeader/TaxYr|/Return/ReturnHeader/TaxYear" )
     if ( is.na(ty) && ! is.na(begin) ) { ty <- substr( begin, 1, 4 ) }
-    data.frame(
-      OBJECT_ID          = sub( "_public\\.xml$", "", basename(f) ),
+    list(
+      OBJECT_ID          = oid,
       TaxYear            = ty,
       FormType           = get( "/Return/ReturnHeader/ReturnTypeCd|/Return/ReturnHeader/ReturnType" ),
       ReturnTs           = get( "/Return/ReturnHeader/ReturnTs|/Return/ReturnHeader/Timestamp" ),
       TaxPeriodBeginDate = begin,
       TaxPeriodEndDate   = get( "/Return/ReturnHeader/TaxPeriodEndDt|/Return/ReturnHeader/TaxPeriodEndDate" ),
       ReturnVersion      = xml2::xml_attr( xml2::xml_root(doc), "returnVersion" ),
-      stringsAsFactors   = FALSE )
+      READ_ERROR         = NA_character_ )
   }
-  do.call( rbind, lapply( files, one ) )
+  out <- data.table::rbindlist( lapply( files, one ) )
+  bad <- sum( ! is.na( out$READ_ERROR ) )
+  if ( bad > 0 ) { message( bad, " file(s) could not be parsed; see READ_ERROR." ) }
+  out
 }
 
 
@@ -396,6 +507,12 @@ upload_patch <- function( dir, build, bucket = "nccs-efile", dry_run = TRUE, wor
   if ( ! requireNamespace( "aws.s3", quietly = TRUE ) ) { stop( "upload_patch() needs the aws.s3 package." ) }
   prefix <- paste0( "xml2/", build, "_patch/" )
   files  <- list.files( dir, pattern = "_public\\.xml$|^PATCH-INDEX-.*\\.csv$" )
+  xml    <- grepl( "_public\\.xml$", files )
+  bad    <- files[ xml ][ ! vapply( file.path( dir, files[ xml ] ), is_xml_file, logical(1) ) ]
+  if ( length(bad) > 0 ) {
+    message( length(bad), " file(s) are not valid XML and will not be uploaded, e.g. ", bad[1] )
+    files <- setdiff( files, bad )
+  }
   have   <- aws.s3::get_bucket_df( bucket, prefix = prefix, max = Inf )$Key
   todo   <- files[ ! paste0( prefix, files ) %in% have ]
   message( length(files), " local files; ", length(todo), " not yet in s3://", bucket, "/", prefix )

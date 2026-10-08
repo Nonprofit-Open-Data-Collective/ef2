@@ -17,11 +17,12 @@ stream_unzip(zf, files, dest)
 The base names of the files extracted.
 }
 \description{
-Some IRS zips cannot be opened by index: \verb{2024_TEOS_XML_05A.zip}
-(156,237 entries, zip64) fails in \code{\link[utils:unzip]{utils::unzip()}}, \code{\link[zip:zip_list]{zip::zip_list()}}, and
-Info-ZIP \code{unzip} alike. Reading it front to back from the local file
-headers works, so the zip is piped through libarchive's \code{bsdtar} in
-streaming mode and only the wanted files are extracted.
+Last resort in \code{\link[=extract_zip_files]{extract_zip_files()}}. Some IRS zips cannot be
+opened by index; reading them front to back from the local file headers
+works for entries compressed with ordinary Deflate. The zip is piped through
+libarchive's \code{bsdtar} in streaming mode and only the wanted files are
+extracted. \strong{On Deflate64 entries bsdtar writes zero-filled files}, which
+is why the caller validates the output.
 }
 \details{
 Needs \code{bsdtar}. It ships with Windows 10+ as
