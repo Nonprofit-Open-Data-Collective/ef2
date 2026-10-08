@@ -112,3 +112,20 @@ test_that("fetch_irs_xml() re-fetches files an earlier run extracted as zeros", 
   expect_equal(got$OBJECT_ID, "111")
   expect_true(is_xml_file(file.path(dest, "111_public.xml")))
 })
+
+test_that("find_missing_urls() reads a local source_db and matches on OBJECTID", {
+  db <- tempfile(fileext = ".duckdb")
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db)
+  DBI::dbWriteTable(con, "KEYS", data.frame(OBJECTID = c("OID-111", "OID-222"), URL = "x"))
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  on.exit(unlink(db))
+  gt <- "https://gt990datalake-rawdata.s3.amazonaws.com/EfileData/XmlFiles/"
+  index <- data.frame(
+    TaxYear = c("2024", "2024", "2024", "2023"),
+    URL = c(paste0(gt, "111_public.xml"),        # in the DB
+            patch_url("222", "v2_3"),           # in the DB under another URL: not missing
+            patch_url("333", "v2_3"),           # missing
+            paste0(gt, "444_public.xml")))      # other year
+  m <- suppressMessages(find_missing_urls(2024, index, source_db = db))
+  expect_equal(m, patch_url("333", "v2_3"))
+})
