@@ -8,7 +8,7 @@ update_db(
   year,
   index,
   path = ".",
-  version = "efile_v2_1",
+  version = "efile_v2_3",
   source_db = NULL,
   ccf = NULL,
   workers = NULL
@@ -21,15 +21,19 @@ update_db(
 
 \item{path}{Directory for the temporary and merged database files.}
 
-\item{version}{S3 version subfolder under duckdb/ (default "efile_v2_1").}
+\item{version}{S3 version subfolder under duckdb/ (default "efile_v2_3").}
 
 \item{source_db}{Optional path to a local \code{.duckdb}. When given, missing
 filings are found against it and appended to it \strong{in place} with
 \code{\link[=append_to_database]{append_to_database()}}; nothing is read from or written to S3.}
 
 \item{ccf}{Concordance used to label the new filings (passed to
-\code{\link[=build_database]{build_database()}}). Pass the release's concordance so new filings carry
-the same labels as the archive; \code{NULL} uses \code{\link[=get_concordance]{get_concordance()}}.}
+\code{\link[=build_database]{build_database()}}). New filings must carry the same labels as the archive.
+\code{NULL} (default) uses \code{\link[=release_concordance]{release_concordance()}} for the archive's release:
+\code{version} for an S3 archive, or the release recorded in \code{source_db}'s
+\code{RELABEL_LOG} for a local one (falling back to \code{\link[=get_concordance]{get_concordance()}} when it
+has none). A release with no packaged concordance, such as \code{efilepf_v2_3},
+stops with an error; pass \code{ccf} for those.}
 
 \item{workers}{Passed to \code{\link[=build_database]{build_database()}}.}
 }

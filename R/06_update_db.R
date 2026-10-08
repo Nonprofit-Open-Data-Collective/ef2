@@ -13,13 +13,13 @@
 #'
 #' @param year Integer tax year.
 #' @param index Data frame with columns TaxYear and URL.
-#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_3").
 #'   Set to NULL or "" to target the unversioned duckdb/ path.
 #' @param source_db Optional path to a local `.duckdb` to compare against
 #'   instead of the S3 archive (e.g. a local `EFILEPF<year>.duckdb`).
 #' @return Character vector of missing URLs.
 #' @export
-find_missing_urls <- function(year, index, version = "efile_v2_1", source_db = NULL) {
+find_missing_urls <- function(year, index, version = "efile_v2_3", source_db = NULL) {
   base::message("\U0001F50E Checking for missing URLs in TaxYear ", year)
 
   year <- as.character(year)
@@ -64,17 +64,21 @@ find_missing_urls <- function(year, index, version = "efile_v2_1", source_db = N
 #' @param year Integer tax year.
 #' @param index Data frame with TaxYear and URL columns.
 #' @param path Directory for the temporary and merged database files.
-#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_3").
 #' @param source_db Optional path to a local `.duckdb`. When given, missing
 #'  filings are found against it and appended to it **in place** with
 #'  [append_to_database()]; nothing is read from or written to S3.
 #' @param ccf Concordance used to label the new filings (passed to
-#'  [build_database()]). Pass the release's concordance so new filings carry
-#'  the same labels as the archive; `NULL` uses [get_concordance()].
+#'  [build_database()]). New filings must carry the same labels as the archive.
+#'  `NULL` (default) uses [release_concordance()] for the archive's release:
+#'  `version` for an S3 archive, or the release recorded in `source_db`'s
+#'  `RELABEL_LOG` for a local one (falling back to [get_concordance()] when it
+#'  has none). A release with no packaged concordance, such as `efilepf_v2_3`,
+#'  stops with an error; pass `ccf` for those.
 #' @param workers Passed to [build_database()].
 #' @return Invisibly path to merged database or NULL.
 #' @export
-update_db <- function(year, index, path=".", version = "efile_v2_1", source_db = NULL,
+update_db <- function(year, index, path=".", version = "efile_v2_3", source_db = NULL,
                       ccf = NULL, workers = NULL) {
   base::message("\U0001F680 Updating database for TaxYear ", year)
 
@@ -83,6 +87,13 @@ update_db <- function(year, index, path=".", version = "efile_v2_1", source_db =
   if (base::length(missing_urls) == 0) {
     base::message("No missing files found. Database is up to date.")
     return(base::invisible(NULL))
+  }
+
+  if (base::is.null(ccf)) {
+    release <- if (base::is.null(source_db)) version else db_release(source_db)
+    base::message("Labelling new filings with the concordance for release: ",
+                  if (base::is.null(release) || release == "") "(none recorded)" else release)
+    ccf <- release_concordance(release)
   }
 
   base::message("Building temporary database with ", base::length(missing_urls), " missing files\n")
@@ -115,14 +126,14 @@ update_db <- function(year, index, path=".", version = "efile_v2_1", source_db =
 #' @param missing_urls Character vector (for logging).
 #' @param temp_db_path Path to temporary DuckDB with new filings.
 #' @param output_path Path for final merged DB.
-#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_3").
 #' @param source_db Optional path/URL of the base ("source") database to merge
 #'   into. Defaults to `NULL`, in which case the S3-hosted archive for `year`
 #'   (under `version`) is used. Pass a local `.duckdb` path to merge into an
 #'   already-downloaded archive or for testing.
 #' @return Invisibly `output_path`.
 #' @export
-merge_databases <- function(year, missing_urls, temp_db_path, output_path, version = "efile_v2_1", source_db = NULL) {
+merge_databases <- function(year, missing_urls, temp_db_path, output_path, version = "efile_v2_3", source_db = NULL) {
   # Coerce year to character so filename/URL/log builders never hit sprintf("%d")
   # with a character TaxYear (a common failure mode when years come from an index).
   year <- base::as.character(year)
@@ -214,6 +225,17 @@ merge_databases <- function(year, missing_urls, temp_db_path, output_path, versi
     ), log_conn)
   }
 
+  # Provenance tables (efile_v2_3 onward) record how the archive was labelled
+  # and repaired. Carry them over so the merged archive still says so.
+  src_tables <- DBI::dbGetQuery(con,
+    "SELECT table_name FROM information_schema.tables WHERE table_catalog = 'src';")$table_name
+  for (tbl in base::intersect(base::c("RELABEL_LOG", "REPAIR_LOG"), src_tables)) {
+    if (!DBI::dbExistsTable(con, tbl)) {
+      DBI::dbExecute(con, base::sprintf("CREATE TABLE main.%s AS SELECT * FROM src.%s;", tbl, tbl))
+      base::writeLines(base::sprintf("%s | copied from source", tbl), log_conn)
+    }
+  }
+
   DBI::dbExecute(con, "DETACH tmpdb;")
   DBI::dbExecute(con, "DETACH src;")
   DBI::dbDisconnect(con, shutdown = TRUE)
@@ -241,7 +263,7 @@ merge_databases <- function(year, missing_urls, temp_db_path, output_path, versi
 #' multipart parallelism, otherwise falls back to [utils::download.file()].
 #'
 #' @param year Tax year (integer or character).
-#' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param version S3 version subfolder under duckdb/ (default "efile_v2_3").
 #'   Set NULL or "" for the unversioned path.
 #' @param dest Destination path. Defaults to `EFILE<year>.duckdb` in the
 #'   working directory.
@@ -249,7 +271,7 @@ merge_databases <- function(year, missing_urls, temp_db_path, output_path, versi
 #'   download is skipped.
 #' @return Invisibly, the local destination path.
 #' @export
-download_s3_database <- function(year, version = "efile_v2_1", dest = NULL, overwrite = FALSE) {
+download_s3_database <- function(year, version = "efile_v2_3", dest = NULL, overwrite = FALSE) {
   year <- base::as.character(year)
   version_seg <- if (base::is.null(version) || version == "") "" else base::paste0(version, "/")
   if (base::is.null(dest)) dest <- base::paste0("EFILE", year, ".duckdb")
