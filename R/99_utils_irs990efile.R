@@ -26,15 +26,11 @@
 #' base <- "https://gt990datalake-rawdata.s3.amazonaws.com/EfileData/XmlFiles/"
 #' get_object_id(paste0(base, "202301529349200315_public.xml"))
 #' # "OID-202301529349200315"
-#' @seealso [get_object_id2()] for a variant that also handles the TEOS xml2 URL bases.
+#' @seealso [get_object_id2()], which this now matches: both take the ID from
+#'  the file name, so URLs on any host or folder work.
 #' @export
 get_object_id <- function( url ){
-  base_01 <- "https://gt990datalake-rawdata.s3.amazonaws.com/EfileData/XmlFiles/"
-  base_02 <- "https://nccs-efile.s3.us-east-1.amazonaws.com/xml/"
-  object.id <- gsub( paste0( base_01, "|", base_02 ), "", url)
-  object.id <- gsub( "_public.xml", "", object.id )
-  object.id <- paste0( "OID-", object.id )
-  return(object.id)
+  get_object_id2( url )
 }
 
 

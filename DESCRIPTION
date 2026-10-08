@@ -26,12 +26,15 @@ Imports:
     knitr,
     data.tree,
     utils,
-    stats
+    stats,
+    curl,
+    zip
 Suggests:
     roxygen2,
     testthat,
     rmarkdown,
-    usethis
+    usethis,
+    aws.s3
 VignetteBuilder: knitr
 LazyData: true
 Roxygen: list(markdown = TRUE)

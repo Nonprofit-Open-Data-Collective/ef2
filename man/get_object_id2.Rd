@@ -7,14 +7,21 @@
 get_object_id2(url)
 }
 \arguments{
-\item{url}{Character. Full XML URL.}
+\item{url}{Character. Full XML URL (vectorised).}
 }
 \value{
-Character scalar OBJECTID.
+Character OBJECTID.
 }
 \description{
-Converts known IRS 990 e-file XML URLs into a standardized OBJECTID
+Converts an IRS 990 e-file XML URL into a standardized OBJECTID
 (prefixed with \verb{OID-}) used as a database key.
+}
+\details{
+The ID is taken from the file name (\verb{<OBJECTID>_public.xml}), so
+any host or folder works: GTDC \verb{XmlFiles/}, NCCS \verb{xml/}, and the patch
+folders under \verb{xml2/} (e.g. \verb{xml2/v2_3_patch/}). Earlier versions removed a
+fixed list of URL prefixes, so a URL from any other folder produced a key
+that still contained the URL.
 }
 \examples{
 get_object_id2("https://nccs-efile.s3.us-east-1.amazonaws.com/xml/202220139349301207_public.xml")

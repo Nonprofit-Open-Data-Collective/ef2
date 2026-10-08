@@ -4,7 +4,15 @@
 \alias{update_db}
 \title{Update the DuckDB database for a given tax year}
 \usage{
-update_db(year, index, path = ".", version = "efile_v2_1")
+update_db(
+  year,
+  index,
+  path = ".",
+  version = "efile_v2_1",
+  source_db = NULL,
+  ccf = NULL,
+  workers = NULL
+)
 }
 \arguments{
 \item{year}{Integer tax year.}
@@ -14,6 +22,16 @@ update_db(year, index, path = ".", version = "efile_v2_1")
 \item{path}{Directory for the temporary and merged database files.}
 
 \item{version}{S3 version subfolder under duckdb/ (default "efile_v2_1").}
+
+\item{source_db}{Optional path to a local \code{.duckdb}. When given, missing
+filings are found against it and appended to it \strong{in place} with
+\code{\link[=append_to_database]{append_to_database()}}; nothing is read from or written to S3.}
+
+\item{ccf}{Concordance used to label the new filings (passed to
+\code{\link[=build_database]{build_database()}}). Pass the release's concordance so new filings carry
+the same labels as the archive; \code{NULL} uses \code{\link[=get_concordance]{get_concordance()}}.}
+
+\item{workers}{Passed to \code{\link[=build_database]{build_database()}}.}
 }
 \value{
 Invisibly path to merged database or NULL.

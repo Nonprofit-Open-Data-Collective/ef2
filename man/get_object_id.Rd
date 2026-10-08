@@ -22,5 +22,6 @@ get_object_id(paste0(base, "202301529349200315_public.xml"))
 # "OID-202301529349200315"
 }
 \seealso{
-\code{\link[=get_object_id2]{get_object_id2()}} for a variant that also handles the TEOS xml2 URL bases.
+\code{\link[=get_object_id2]{get_object_id2()}}, which this now matches: both take the ID from
+the file name, so URLs on any host or folder work.
 }

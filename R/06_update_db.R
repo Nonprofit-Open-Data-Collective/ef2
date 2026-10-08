@@ -1,35 +1,47 @@
 
 #' Identify missing URLs in a given tax year
 #'
-#' Compares the URLs stored in a DuckDB KEYS table (remote S3 database)
-#' against URLs listed in an index data frame, identifying which filings
-#' are missing from the database.
+#' Compares the filings stored in a DuckDB KEYS table (remote S3 database)
+#' against an index data frame, identifying which filings are missing from the
+#' database.
+#'
+#' @details Filings are matched on `OBJECTID`, not on URL. The same filing can
+#'  be served from more than one place (GTDC `XmlFiles/`, an NCCS patch folder
+#'  under `xml2/`), so matching on URL would add a filing a second time when its
+#'  URL changes. If the index lists one filing under several URLs, the first is
+#'  returned.
 #'
 #' @param year Integer tax year.
 #' @param index Data frame with columns TaxYear and URL.
 #' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
 #'   Set to NULL or "" to target the unversioned duckdb/ path.
+#' @param source_db Optional path to a local `.duckdb` to compare against
+#'   instead of the S3 archive (e.g. a local `EFILEPF<year>.duckdb`).
 #' @return Character vector of missing URLs.
 #' @export
-find_missing_urls <- function(year, index, version = "efile_v2_1") {
+find_missing_urls <- function(year, index, version = "efile_v2_1", source_db = NULL) {
   base::message("\U0001F50E Checking for missing URLs in TaxYear ", year)
 
   year <- as.character(year)
-  version_seg <- if (base::is.null(version) || version == "") "" else base::paste0(version, "/")
-  remote_db_url <- base::sprintf(
-    "https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/%sEFILE%s.duckdb",
-    version_seg, year
-  )
-
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-  DBI::dbExecute(con, "INSTALL httpfs;")
-  DBI::dbExecute(con, "LOAD httpfs;")
-  DBI::dbExecute(con, "SET s3_region='us-east-1';")
-  DBI::dbExecute(con, base::sprintf("ATTACH '%s' AS src (READ_ONLY);", remote_db_url))
+  if (base::is.null(source_db)) {
+    version_seg <- if (base::is.null(version) || version == "") "" else base::paste0(version, "/")
+    remote_db_url <- base::sprintf(
+      "https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/%sEFILE%s.duckdb",
+      version_seg, year
+    )
+    DBI::dbExecute(con, "INSTALL httpfs;")
+    DBI::dbExecute(con, "LOAD httpfs;")
+    DBI::dbExecute(con, "SET s3_region='us-east-1';")
+    DBI::dbExecute(con, base::sprintf("ATTACH '%s' AS src (READ_ONLY);", remote_db_url))
+  } else {
+    if (!base::file.exists(source_db)) base::stop("source_db not found: ", source_db)
+    DBI::dbExecute(con, base::sprintf("ATTACH '%s' AS src (READ_ONLY);", source_db))
+  }
 
-  urls_db <- 
-    DBI::dbGetQuery(con, "SELECT DISTINCT url FROM src.KEYS;") |>
-    dplyr::pull(.data$URL)
+  oids_db <-
+    DBI::dbGetQuery(con, "SELECT DISTINCT OBJECTID FROM src.KEYS;") |>
+    dplyr::pull(.data$OBJECTID)
 
   DBI::dbDisconnect(con, shutdown = TRUE)
 
@@ -37,8 +49,10 @@ find_missing_urls <- function(year, index, version = "efile_v2_1") {
     dplyr::filter(.data$TaxYear == year) |>
     dplyr::pull(.data$URL) |>
     base::unique()
+  oids_index <- get_object_id2(urls_index)
+  keep <- !base::duplicated(oids_index) & !(oids_index %in% oids_db)
 
-  missing_urls <- base::setdiff(urls_index, urls_db)
+  missing_urls <- urls_index[keep]
   base::message(base::length(missing_urls), " missing URLs detected.")
   return(missing_urls)
 }
@@ -51,12 +65,20 @@ find_missing_urls <- function(year, index, version = "efile_v2_1") {
 #' @param index Data frame with TaxYear and URL columns.
 #' @param path Directory for the temporary and merged database files.
 #' @param version S3 version subfolder under duckdb/ (default "efile_v2_1").
+#' @param source_db Optional path to a local `.duckdb`. When given, missing
+#'  filings are found against it and appended to it **in place** with
+#'  [append_to_database()]; nothing is read from or written to S3.
+#' @param ccf Concordance used to label the new filings (passed to
+#'  [build_database()]). Pass the release's concordance so new filings carry
+#'  the same labels as the archive; `NULL` uses [get_concordance()].
+#' @param workers Passed to [build_database()].
 #' @return Invisibly path to merged database or NULL.
 #' @export
-update_db <- function(year, index, path=".", version = "efile_v2_1") {
+update_db <- function(year, index, path=".", version = "efile_v2_1", source_db = NULL,
+                      ccf = NULL, workers = NULL) {
   base::message("\U0001F680 Updating database for TaxYear ", year)
 
-  missing_urls <- find_missing_urls(year, index, version = version)
+  missing_urls <- find_missing_urls(year, index, version = version, source_db = source_db)
 
   if (base::length(missing_urls) == 0) {
     base::message("No missing files found. Database is up to date.")
@@ -64,8 +86,15 @@ update_db <- function(year, index, path=".", version = "efile_v2_1") {
   }
 
   base::message("Building temporary database with ", base::length(missing_urls), " missing files\n")
-  
-  temp_db_path <- build_database( year=year, urls=missing_urls, path=path, is_update=TRUE )  
+
+  temp_db_path <- build_database( year=year, urls=missing_urls, path=path, is_update=TRUE,
+                                  ccf=ccf, workers=workers )
+
+  if (!base::is.null(source_db)) {
+    append_to_database( source_db, temp_db_path )
+    base::message("\U0001F3AF Update complete for TaxYear ", year, ": appended to ", source_db)
+    return(base::invisible(source_db))
+  }
 
   year_path <- file.path(path, year)
   dir.create(year_path, showWarnings = FALSE, recursive = TRUE)

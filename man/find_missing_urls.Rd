@@ -4,7 +4,7 @@
 \alias{find_missing_urls}
 \title{Identify missing URLs in a given tax year}
 \usage{
-find_missing_urls(year, index, version = "efile_v2_1")
+find_missing_urls(year, index, version = "efile_v2_1", source_db = NULL)
 }
 \arguments{
 \item{year}{Integer tax year.}
@@ -13,12 +13,22 @@ find_missing_urls(year, index, version = "efile_v2_1")
 
 \item{version}{S3 version subfolder under duckdb/ (default "efile_v2_1").
 Set to NULL or "" to target the unversioned duckdb/ path.}
+
+\item{source_db}{Optional path to a local \code{.duckdb} to compare against
+instead of the S3 archive (e.g. a local \verb{EFILEPF<year>.duckdb}).}
 }
 \value{
 Character vector of missing URLs.
 }
 \description{
-Compares the URLs stored in a DuckDB KEYS table (remote S3 database)
-against URLs listed in an index data frame, identifying which filings
-are missing from the database.
+Compares the filings stored in a DuckDB KEYS table (remote S3 database)
+against an index data frame, identifying which filings are missing from the
+database.
+}
+\details{
+Filings are matched on \code{OBJECTID}, not on URL. The same filing can
+be served from more than one place (GTDC \verb{XmlFiles/}, an NCCS patch folder
+under \verb{xml2/}), so matching on URL would add a filing a second time when its
+URL changes. If the index lists one filing under several URLs, the first is
+returned.
 }
