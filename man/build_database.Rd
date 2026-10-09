@@ -43,6 +43,11 @@ Processes XML batches in parallel, with each worker writing to its own DuckDB
 shard. When all workers complete, the shards are merged into a unified
 database for the specified year.
 }
+\details{
+Workers share one queue of batch files and claim the next batch when they
+finish one (see \code{\link[=run_batch_queue]{run_batch_queue()}}), so a slow filing holds up one worker
+rather than every batch assigned to it (EF2-20).
+}
 \examples{
 \dontrun{
 build_database(2021, urls = urls, group.size = 25, path = "data")

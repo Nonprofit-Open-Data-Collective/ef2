@@ -38,6 +38,17 @@ test_that("merge_duckdbs(skip_existing = TRUE) never copies a filing twice", {
   expect_equal(counts(main)[["keys"]], 6)
 })
 
+test_that("merge_duckdbs() skips an empty shard (EF2-20: a worker that claimed no batch)", {
+  dir <- tempfile("shards"); dir.create(dir); on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+  a <- make_shard(file.path(dir, "worker_01_2099.duckdb"), c("OID-1", "OID-2"))
+  empty <- file.path(dir, "worker_02_2099.duckdb")
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = empty); DBI::dbDisconnect(con, shutdown = TRUE)
+  main <- file.path(dir, "EFILE2099.duckdb")
+
+  suppressMessages(merge_duckdbs(main, c(a, empty), skip_existing = TRUE))
+  expect_equal(counts(main), c(keys = 2, distinct = 2, flatxml = 4, attributes = 2))
+})
+
 test_that("collect_worker_dbs() adds every shard of the year, once", {
   dir <- tempfile("shards"); dir.create(dir); on.exit(unlink(dir, recursive = TRUE), add = TRUE)
   for (f in c("worker_01_2099.duckdb", "worker_11_2099.duckdb", "worker_12_2099.duckdb",
