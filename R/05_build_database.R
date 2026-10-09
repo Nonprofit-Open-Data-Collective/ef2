@@ -31,6 +31,13 @@
 build_database <- function(year, urls = NULL, group.size = 25,
                            ccf = NULL, path = ".", is_update=FALSE, workers = NULL) {
 
+  # Evaluate every argument now. An unevaluated argument keeps the caller's
+  # environment alive, and the worker closures below reference this frame, so
+  # future would serialize the caller's objects to each worker (update_db()
+  # once sent a 2.1 GB index this way).
+  force(year); force(urls); force(group.size); force(ccf); force(path)
+  force(is_update); force(workers)
+
   # --- Helper: portable in-memory detection ---
   is_in_memory_duckdb <- function(con) {
     info <- tryCatch(DBI::dbGetInfo(con), error = function(e) list(dbname = NA))

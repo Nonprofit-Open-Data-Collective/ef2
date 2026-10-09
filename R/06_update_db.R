@@ -83,6 +83,10 @@ update_db <- function(year, index, path=".", version = "efile_v2_3", source_db =
   base::message("\U0001F680 Updating database for TaxYear ", year)
 
   missing_urls <- find_missing_urls(year, index, version = version, source_db = source_db)
+  # Drop the index before build_database() starts its workers. Anything still
+  # reachable from this frame is shipped to every worker by future: a full
+  # GTDC index (7.6M rows) came to 2.1 GB and exceeded future's 500 MB limit.
+  base::rm(index)
 
   if (base::length(missing_urls) == 0) {
     base::message("No missing files found. Database is up to date.")
