@@ -20,7 +20,13 @@ utils::globalVariables(c(
   # 12_patch_index.R (data.table columns)
   "XML_BATCH_ID", "INDEX_YEAR", "RETURN_TYPE", "OBJECT_ID", "ZIP_FILE",
   "ObjectId", "URL", "ZipFile", "PATCH_BUILD", "PATCH_CREATED", "SOURCE",
-  ".N", ".SD", "..cols"
+  ".N", ".SD", "..cols",
+  # 13_release_notes.R (data.table columns)
+  "table", "year", "file", "file_name", "name", "rows", "ncol", "version", "column",
+  "change", "years", "N", "rows_old", "rows_new", "ncol_old", "ncol_new", "d_rows", "d_cols",
+  "return_type", "old", "new", "variable_name", "rdb_table", "variable_name_old",
+  "variable_name_new", "rdb_table_old", "rdb_table_new", "multi_value_old", "multi_value_new",
+  "from", "to"
 ))
 
 # ef2 does not import data.table, so data.table's `[` must be told that this
