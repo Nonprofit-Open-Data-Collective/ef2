@@ -1913,7 +1913,7 @@ field `get_keys()` uses. The upload was verified on S3:
 Local files, logs and scripts are in
 `C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026/V2_3_PATCH/`.
 
-### Applied in `efile_v3_1` / `efilepf_v3_1` (in progress)
+### Applied in `efile_v3_1` / `efilepf_v3_1` (published 2026-10-09)
 
 v3_1 is the first release built from `combine_index(gt, patch)`. Work is in
 `C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026/V3_1_WORK/`.
@@ -1981,8 +1981,63 @@ v3_1 is the first release built from `combine_index(gt, patch)`. Work is in
    or `update_db()` run.** Loading the source is not enough.
    `update_db()` also once sent its whole index to every worker and failed
    on `future`'s 500 MB limit; that is fixed in #24.
-3. **Tables.** Not built yet. They will be rebuilt from the updated archives
-   with the merged ef2 (#16, plus EF2-12, EF2-19 and PF headers from #17–#20).
+3. **Tables (built 2026-10-08).** Built from the updated archives with ef2
+   `main` `3dd36c4`, frozen in `V3_1_WORK/ef2-snapshot`, using the v2_3
+   methods unchanged:
+   - **990:** the archive is read directly, 136 tables a year.
+   - **PF:** a view joins `multi_value` variables with `;`, 83 tables a year,
+     with a collisions report.
+   - **Checks:** every CSV/Parquet pair passed `verify_table_output()`.
+4. **Two more defects from the stale ef2 (repaired 2026-10-09).** The count
+   sheet's consistency check found 298 table rows with an empty
+   `RETURN_TYPE`, in TY2024–2025 only. Tracing them found two defects:
+   - **Old `TABLE_ID` format.** Large update runs wrote `TID-NNNNN`, not the
+     fixed-width `TID-NNN-NNN-NNN` (EF2-17). In the PF view, a filing's
+     joined `multi_value` cells (`TID-000-000-000`) and its other T00 cells
+     (`TID-00000`) could then have split it across two rows. Small updates
+     wrote the correct format.
+   - **EF2-11.** 11 `irs:`-prefixed filings (TY2024: 3; TY2025: 7 990 and
+     1 PF) had blank `KEYS`.
+
+   **No other defects.** 52 random added filings were re-parsed with current
+   ef2 and matched on every `FLATXML` column, `KEYS` field and `ATTRIBUTES`
+   row. The only difference was `TABLE_ID`, and the EF2-17 conversion
+   reproduces current ef2's IDs exactly. That was checked on the 15 largest
+   added filings, up to 1.08M rows and 89,892 IDs each.
+
+   **Repair.**
+   - `v31_tid_rewrite.R` converted 209M old-format IDs in 10 archives (990
+     TY2022–2025; PF TY2017, 2018 and 2022–2025), building a compact copy and
+     swapping it in. Row counts and the sum of ID numbers were unchanged, and
+     no malformed IDs remained.
+   - `v31_reparse_prefixed.R` re-parsed the 11 filings. The re-parsed rows
+     match the stored ones apart from the prefix. Each archive records the fix
+     in a `REPAIR_LOG` table.
+
+   **Result.** The integrity check over all 34 archives (7,542,621 filings)
+   found zero defects. The 10 affected table-years were rebuilt; the
+   superseded files are in `V3_1_WORK/tables_superseded/`. A scan of all
+   401.8M table rows found no malformed keys, no old-format IDs, no blank
+   `RETURN_TYPE`, and no T00 table with two rows for a filing.
+5. **Published (2026-10-09).** `v31_publish.sh` uploaded:
+   - the 34 archives, to `duckdb/efile_v3_1/` and `duckpf/efilepf_v3_1/`;
+   - 4,625 + 2,823 table files and count sheets, to `public/efile_v3_1/` and
+     `public/efilepf_v3_1/`.
+
+   It refused to start unless all four prefixes were empty, and failed if an
+   archive changed mid-run. Every object matched its local file by ETag.
+   `RELEASE-NOTES-EFILE[PF]_V3_1.md` were then generated with
+   `compare_releases()` / `write_release_notes()` (#25) and published beside
+   the count sheets.
+
+   Against v2_3, the only differences are the expected ones:
+   - the added filings, in 990 TY2021–2025 and PF TY2016–2019 and 2022–2025;
+   - `F9_00_ORG_EXEMPT_TYPE` in the header (EF2-12; empty for PF);
+   - 7 IRS e-file security columns, TY2020–2021;
+   - the PF-P09 table changes.
+
+   The 187 990 xpath moves change no published table. The tables they left
+   were never built, and the builders already selected those cells by xpath.
 
 ---
 

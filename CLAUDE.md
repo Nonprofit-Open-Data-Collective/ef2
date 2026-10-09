@@ -45,10 +45,12 @@ order (EF2-17); published tables are sorted `ORG_EIN, OBJECTID, TABLE_ID`.
 
 ## Published archives
 
-DuckDB databases, TY2009–2024. **`efile_v2_3` is current**; `efile_v2_2` stays
+DuckDB databases. **`efile_v3_1` (TY2009–2025) is current**; it is described in
+its own section below. `efile_v2_3` and `efile_v2_2` (TY2009–2024) stay
 published, unchanged:
 
 ```
+https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v3_1/EFILE<YEAR>.duckdb
 https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v2_3/EFILE<YEAR>.duckdb
 https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v2_2/EFILE<YEAR>.duckdb
 ```
@@ -151,10 +153,20 @@ indices from `XPATH2` (EF2-16). Scripts and logs are in
 `C:/Users/jlecy/Documents/EFILE_BUILD_SEPT_2026/PF_V2_3_WORK/`, and the record is
 in `dev/UPSTREAM-ISSUES.md` under "efilepf_v2_3".
 
-### Next release: `efile_v3_1` / `efilepf_v3_1` (in progress)
+### Current release: `efile_v3_1` / `efilepf_v3_1` (published 2026-10-09)
 
-v3_1 adds filings that the GTDC index never listed, and a TY2025 archive. The
-record is in `dev/UPSTREAM-ISSUES.md` under EF2-18.
+```
+https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckdb/efile_v3_1/EFILE<YEAR>.duckdb
+https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/duckpf/efilepf_v3_1/EFILEPF<YEAR>.duckdb
+https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/public/efile_v3_1/
+https://nccs-efile.s3.dualstack.us-east-1.amazonaws.com/public/efilepf_v3_1/
+```
+
+v3_1 adds filings that the GTDC index never listed, and a TY2025 archive. Each
+table folder has its count sheet and `RELEASE-NOTES-EFILE[PF]_V3_1.md`. The notes
+were generated with `compare_releases()` / `write_release_notes()`
+(`R/13_release_notes.R`), plus a hand-written Notes section. The record is in
+`dev/UPSTREAM-ISSUES.md` under EF2-18.
 
 - **Patch.** 184,165 IRS-indexed 990/990EZ/990PF filings were missing from the
   GTDC index of 2026-08-25. They are re-hosted at
@@ -174,13 +186,26 @@ record is in `dev/UPSTREAM-ISSUES.md` under EF2-18.
 - **Install before building.** `build_database()`'s workers are separate R
   sessions that load the ef2 **installed in the R library**. They do not see
   code loaded with `devtools::load_all()`. Run `devtools::install()` first. In
-  v3_1 a stale install (2026-09-24, before #16) keyed 103M patch rows as
-  `OID-https://…`, which then had to be repaired (EF2-18).
-- **Status.** The archives are local only: 17 per form (TY2009–2025)
-  in `DUCKDB_V3_1/` and `DUCKDB_PF_V3_1/`, with 6.31M 990 and 1.23M PF
-  filings. Relabel, update and repair were done 2026-10-08. The tables are not
-  built, and nothing is published under v3_1 yet. When it is, expect
-  `duckdb/efile_v3_1/`, `duckpf/efilepf_v3_1/`, and `public/efile[pf]_v3_1/`.
+  v3_1 a stale install (2026-09-24, before #16 and EF2-17) left three defects
+  in the added filings, all repaired before publishing (EF2-18):
+  - 103M rows keyed `OID-https://…`;
+  - 209M rows with the old `TID-NNNNN` table IDs;
+  - 11 `irs:`-prefixed filings with blank `KEYS`.
+- **Contents.** 17 archives per form (TY2009–2025): 6,307,836 990 filings and
+  1,234,785 990-PF filings. The tables are 136 a year (990) and 83 a year (PF),
+  CSV + Parquet. Everything was verified against S3 by ETag.
+- **Checks before publishing.** In `V3_1_WORK/`:
+  - `v31_integrity.R`: keys, `TABLE_ID` format, blank keys, duplicates,
+    orphans, brackets and labels in every archive;
+  - `table_scan.R`: the same defects across every table row;
+  - `v31_counts.R`: the count sheets, which check that per-form counts add up.
+
+  Run all three for any future release.
+- **Pinned concordance.** `update_db()` reads the concordance pinned for a
+  release from `inst/extdata/concordance-<release>.csv.gz`. There is no
+  `efile_v3_1` file yet. Until one is added (from
+  `V3_1_WORK/concordance_v2_F990*.csv`), pass `ccf` explicitly when updating
+  v3_1 archives.
 
 ## Consumers
 
