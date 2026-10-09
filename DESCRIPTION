@@ -1,7 +1,7 @@
 Package: ef2
 Type: Package
 Title: Tools for Building and Maintaining the IRS 990 Efiler Database
-Version: 0.1.0
+Version: 2.0.0
 Authors@R:
     person("Jesse", "Lecy", email = "jlecy@asu.edu", role = c("aut", "cre"))
 Description: Provides tools for retrieving, parsing, and flattening IRS 990 e-file XML data into relational form, 
