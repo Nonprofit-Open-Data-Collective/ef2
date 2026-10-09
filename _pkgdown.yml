@@ -1,10 +1,39 @@
 url: https://nonprofit-open-data-collective.github.io/ef2/
 
+destination: docs
+
 template:
   bootstrap: 5
-  bootswatch: simplex
+  light-switch: true
   bslib:
-    pkgdown-nav-height: 100px
+    primary: "#bd5416"
+    navbar-bg: "#153243"
+    link-color: "#8f3f10"
+    body-color: "#1f2429"
+    border-color: "#dcdfe4"
+    code-color: "#8f3f10"
+    base_font: {google: "Source Sans 3"}
+    heading_font: {google: "Zilla Slab"}
+    code_font: {google: "Source Code Pro"}
+    font-size-base: "1.0625rem"
+    line-height-base: 1.62
+
+home:
+  title: ef2
+  description: >
+    Retrieve IRS 990, 990-EZ and 990-PF e-file XML, flatten it into DuckDB, and
+    extract analysis-ready relational tables.
+
+authors:
+  Jesse Lecy:
+    href: https://github.com/lecy
+
+navbar:
+  type: dark
+  bg: primary
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, lightswitch, github]
 
 articles:
 - title: Building & maintaining the database
@@ -30,6 +59,7 @@ reference:
   - prep_concordance
   - update_concordance
   - concordance_is_current
+  - release_concordance
 - title: The filing index
   desc: >
     Locate the returns available to process from the Giving Tuesday Data Commons.
@@ -39,6 +69,7 @@ reference:
   - find_current_index_full
   - find_current_index_batch
   - download_current_index_full
+  - list_gt_indices
 - title: Index helpers
   desc: Lower-level helpers used to resolve and validate index URLs.
   contents:
@@ -74,6 +105,9 @@ reference:
   - batch_flatten
   - get_attr_df
   - get_keys
+  - xml_ns_strip_fast
+  - xml_prefix_strip
+  - get_xml_paths
 - title: XML node & XPath helpers
   desc: >
     Utilities used during flattening to classify nodes, derive table ids, and
@@ -105,6 +139,8 @@ reference:
   - resume_build_database
   - merge_duckdbs
   - validate_merge
+  - dedupe_urls
+  - check_unique_keys
 - title: Updating the database
   desc: >
     Detect and process filings missing from an existing database.
@@ -112,6 +148,8 @@ reference:
   - find_missing_urls
   - update_db
   - merge_databases
+  - download_s3_database
+  - append_to_database
 - title: Connecting to DuckDB & S3
   desc: Open DuckDB connections and read/write databases on S3.
   contents:
@@ -119,6 +157,7 @@ reference:
   - get_s3_database
   - configure_aws_credentials
   - write_csv_to_s3
+  - s3_public_base
 - title: Extracting tables
   desc: >
     Pivot the flattened data into analysis-ready one-to-one and one-to-many
@@ -131,6 +170,31 @@ reference:
   - add_keys
   - get_table_names
   - get_table_headers
+  - audit_table_headers
+  - add_exempt_type
+  - write_table_output
+  - verify_table_output
+- title: Patch index
+  desc: >
+    Find IRS filings missing from the GTDC index, re-host their XML, and
+    build a patch index to combine with it.
+  contents:
+  - get_irs_index
+  - get_irs_zip_urls
+  - match_batch_zips
+  - diff_irs_gt
+  - fetch_irs_xml
+  - read_return_headers
+  - build_patch_index
+  - upload_patch
+  - patch_url
+  - combine_index
+- title: Release notes
+  desc: Compare two releases of the published tables and write release notes.
+  contents:
+  - compare_releases
+  - write_release_notes
+  - condense_years
 - title: Inspecting & reporting
   desc: >
     Summarize database contents and report on XPath coverage across filings.

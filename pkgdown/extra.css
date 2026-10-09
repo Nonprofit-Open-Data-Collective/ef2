@@ -1,0 +1,216 @@
+/* ef2 site style, shared with titleclassifier (matched to the econometrics
+   lecture notes, lecy.github.io/econometrics): navy and burnt orange, Zilla
+   Slab headings, Source Sans 3 body text, quiet ruled tables. */
+
+:root {
+  --tc-ground: #ffffff;
+  --tc-surface: #f3f4f6;
+  --tc-ink: #1f2429;
+  --tc-ink-mid: #4d565f;
+  --tc-ink-soft: #6d7681;
+  --tc-rule: #dcdfe4;
+  --tc-rule-strong: #c3c8cf;
+  --tc-accent: #bd5416;
+  --tc-accent-ink: #8f3f10;
+  --tc-accent-wash: #fbf0e7;
+  --tc-navy: #153243;
+  --tc-pumpkin: #dc965a;
+  --tc-font-display: "Zilla Slab", Georgia, "Times New Roman", serif;
+  --tc-font-body: "Source Sans 3", "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+[data-bs-theme="dark"] {
+  --tc-ground: #15181c;
+  --tc-surface: #1d2126;
+  --tc-ink: #e3e6ea;
+  --tc-ink-mid: #a9b2bc;
+  --tc-ink-soft: #8b949e;
+  --tc-rule: #2d333a;
+  --tc-rule-strong: #3d444d;
+  --tc-accent: #ee8b4a;
+  --tc-accent-ink: #f2a771;
+  --tc-accent-wash: #291d14;
+  --tc-navy: #102734;
+  --bs-body-bg: var(--tc-ground);
+  --bs-body-color: var(--tc-ink);
+  --bs-link-color: var(--tc-accent-ink);
+  --bs-link-color-rgb: 242, 167, 113;
+  --bs-link-hover-color: var(--tc-accent);
+  --bs-border-color: var(--tc-rule);
+  --bs-code-color: var(--tc-accent-ink);
+}
+
+body {
+  background: var(--tc-ground);
+  color: var(--tc-ink);
+  font-family: var(--tc-font-body);
+  font-synthesis-weight: none;
+}
+
+/* ---- navbar ---------------------------------------------------------------- */
+
+.navbar {
+  background-color: var(--tc-navy) !important;
+  border-bottom: 3px solid var(--tc-accent);
+}
+.navbar .navbar-brand {
+  font-family: var(--tc-font-display);
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+.navbar .nav-link,
+.navbar .navbar-brand,
+.navbar .nav-text { color: rgba(255, 255, 255, .88) !important; }
+.navbar .nav-link:hover,
+.navbar .nav-link:focus,
+.navbar .nav-item.active > .nav-link,
+.navbar .nav-link.active { color: var(--tc-pumpkin) !important; }
+.navbar .dropdown-menu { border-color: var(--tc-rule); }
+.navbar .dropdown-item.active,
+.navbar .dropdown-item:active { background-color: var(--tc-accent); }
+.navbar .badge,
+.navbar .version { background: rgba(255, 255, 255, .12) !important; color: #fff !important; }
+
+/* ---- headings ---------------------------------------------------------------- */
+
+h1, h2, h3, .h1, .h2, .h3 {
+  font-family: var(--tc-font-display);
+  color: var(--tc-ink);
+  text-wrap: balance;
+}
+h1, .h1 { font-weight: 700; letter-spacing: -.015em; line-height: 1.08; }
+h2, .h2 { font-weight: 600; line-height: 1.16; margin-top: 2.6rem; }
+h3, .h3 { font-weight: 600; line-height: 1.24; margin-top: 2rem; }
+h4, .h4 {
+  font-family: var(--tc-font-body);
+  font-size: .8125rem;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--tc-ink-soft);
+  margin-top: 1.9rem;
+}
+.page-header {
+  border-bottom: 1px solid var(--tc-rule);
+  padding-bottom: 1.1rem;
+  margin-bottom: 1.6rem;
+}
+.page-header h1 { margin-top: 1.6rem; }
+.page-header .author,
+.page-header .date,
+.page-header small { color: var(--tc-ink-mid); }
+
+/* ---- text ------------------------------------------------------------------- */
+
+a { color: var(--tc-accent-ink); text-decoration-color: rgba(189, 84, 22, .35); text-underline-offset: .15em; }
+a:hover { color: var(--tc-accent); text-decoration-color: currentColor; }
+a:focus-visible { outline: 2px solid var(--tc-accent); outline-offset: 2px; }
+strong, b { font-weight: 700; color: var(--tc-ink); }
+li { margin-bottom: .35rem; }
+li::marker { color: var(--tc-accent); font-weight: 600; }
+
+blockquote {
+  background: var(--tc-accent-wash);
+  border-left: none;
+  border-radius: 3px;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+  color: var(--tc-ink);
+}
+blockquote p:last-child { margin-bottom: 0; }
+
+/* ---- code ------------------------------------------------------------------- */
+
+pre, div.sourceCode {
+  background: var(--tc-surface) !important;
+  border: none;
+  border-radius: 3px;
+}
+pre { padding: .9rem 1.1rem; font-size: .84rem; line-height: 1.5; }
+p code, li code, td code {
+  background: var(--tc-surface);
+  color: var(--tc-accent-ink);
+  padding: .08em .3em;
+  border-radius: 2px;
+  font-size: .88em;
+}
+.btn-copy-ex { color: var(--tc-ink-soft); }
+
+/* ---- tables ----------------------------------------------------------------- */
+
+.contents table, main table {
+  border-collapse: collapse;
+  width: auto;
+  min-width: min(100%, 30rem);
+  font-size: .9rem;
+  margin: 1.2rem 0 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.contents table th, .contents table td,
+main table th, main table td {
+  padding: .55rem .8rem;
+  border: none;
+  border-bottom: 1px solid var(--tc-rule);
+  vertical-align: top;
+  background: transparent;
+}
+.contents table thead th, main table thead th {
+  font-size: .72rem;
+  letter-spacing: .02em;
+  font-weight: 700;
+  color: var(--tc-ink-soft);
+  border-bottom: 1.5px solid var(--tc-rule-strong);
+  vertical-align: bottom;
+}
+.contents table tbody tr:last-child td, main table tbody tr:last-child td { border-bottom: none; }
+.contents table tbody tr:hover td, main table tbody tr:hover td { background: var(--tc-accent-wash); }
+table caption, .table caption {
+  caption-side: top;
+  text-align: left;
+  font-size: .8125rem;
+  letter-spacing: .02em;
+  font-weight: 700;
+  color: var(--tc-ink-soft);
+  padding-bottom: .6rem;
+}
+/* the reference index keeps its own layout */
+.ref-index table { min-width: 0; }
+
+/* ---- sidebar and footer --------------------------------------------------------- */
+
+aside h2, #toc h2, .sidebar h2 {
+  font-family: var(--tc-font-body);
+  font-size: .75rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--tc-ink-soft);
+}
+#toc .nav-link.active, nav[data-toggle="toc"] .nav-link.active {
+  color: var(--tc-accent-ink);
+  border-left-color: var(--tc-accent) !important;
+  background: transparent;
+}
+footer {
+  border-top: 1px solid var(--tc-rule);
+  color: var(--tc-ink-soft);
+  font-size: .8125rem;
+}
+
+/* ---- home page -------------------------------------------------------------- */
+
+.template-home .page-header { border-bottom: none; margin-bottom: .4rem; }
+.template-home .page-header h1 { font-size: 2.6rem; margin-top: 2rem; }
+.template-home main > .section > p:first-of-type strong,
+.template-home main p:first-of-type > strong:only-child {
+  font-family: var(--tc-font-display);
+  font-weight: 600;
+  font-size: 1.3rem;
+  line-height: 1.35;
+  color: var(--tc-accent-ink);
+}
+
+@media (max-width: 640px) {
+  .template-home .page-header h1 { font-size: 2.1rem; }
+  .contents table, main table { min-width: 0; font-size: .82rem; }
+}
