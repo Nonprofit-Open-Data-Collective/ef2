@@ -60,3 +60,20 @@ test_that("merge_databases() carries RELABEL_LOG and REPAIR_LOG into the merged 
   expect_identical( sort( DBI::dbGetQuery( con, "SELECT OBJECTID FROM KEYS" )$OBJECTID ),
                     c( "OID-1", "OID-2" ) )
 })
+
+test_that("release_concordance() returns the pinned v3_1 concordances", {
+  cc <- release_concordance( "efile_v3_1" )
+  expect_identical( names( cc ), c( "xpath", "variable_name", "rdb_table" ) )
+  # concordance990 2.0.1 (02de916), concordance("v2", form = "F990")
+  expect_identical( nrow( cc ), 7075L )
+  expect_false( anyDuplicated( cc$xpath ) > 0 )
+  # moved T01 -> T00 between v2_3 and v3_1
+  expect_true( "SG-P02-T00-FUNDRAISING-EVENTS" %in% cc$rdb_table )
+  expect_false( "SG-P02-T01-FUNDRAISING-EVENTS" %in% cc$rdb_table )
+
+  pf <- release_concordance( "efilepf_v3_1" )
+  expect_identical( nrow( pf ), 2524L )
+  expect_true( "PF-P09-T00-CHARITABLE-ACTIVITIES" %in% pf$rdb_table )
+  expect_false( "PF-P09-T01-CHARITABLE-ACTIVITIES" %in% pf$rdb_table )
+  expect_named( prep_concordance( pf ), c( "XPATH", "VARIABLE_NAME", "RDB_TABLE" ) )
+})

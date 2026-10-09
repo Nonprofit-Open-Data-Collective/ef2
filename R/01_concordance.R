@@ -34,6 +34,12 @@ get_concordance <- function( gh=TRUE ){
 #'   (`xpath`, `variable_name`, `rdb_table`). Pinned rather than read from
 #'   concordance990, because later releases of that package return a different
 #'   concordance (2.0.1: 7,075 rows).
+#' * `efile_v3_1`: concordance990 2.0.1 (commit 02de916),
+#'   `concordance("v2", form = "F990")`, 7,075 rows. Shipped as
+#'   `inst/extdata/concordance-efile_v3_1.csv.gz`.
+#' * `efilepf_v3_1`: the same commit, `concordance("v2", form = "F990PF")`,
+#'   2,524 rows. Shipped as `inst/extdata/concordance-efilepf_v3_1.csv.gz`.
+#'   (v3_1 was labelled from these frozen snapshots; see EF2-18.)
 #' * `efile_v2_0` to `efile_v2_2`, `NULL` or `""`: [get_concordance()], the
 #'   master concordance those archives were built with.
 #' * Anything else, e.g. `efilepf_v2_3`: an error. Pass `ccf` explicitly.
