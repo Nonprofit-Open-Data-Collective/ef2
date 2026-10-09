@@ -40,7 +40,7 @@ Keeping the concordance current is a two-part job:
 database from the sample shipped with the package, and — to simulate an IRS
 schema change — inject one **new field the concordance doesn't know about**:
 
-```{r build-db}
+```{r build-db, message = FALSE}
 library(ef2)
 library(dplyr)
 library(DBI)

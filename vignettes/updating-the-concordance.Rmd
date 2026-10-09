@@ -37,15 +37,6 @@ schema change — inject one **new field the concordance doesn't know about**:
 ``` r
 library(ef2)
 library(dplyr)
-#> Warning: package 'dplyr' was built under R version 4.5.2
-#> 
-#> Attaching package: 'dplyr'
-#> The following objects are masked from 'package:stats':
-#> 
-#>     filter, lag
-#> The following objects are masked from 'package:base':
-#> 
-#>     intersect, setdiff, setequal, union
 library(DBI)
 library(duckdb)
 
@@ -84,22 +75,22 @@ database: how often it occurs, and which IRS schema versions it appears under.
 report <- generate_xpath_report(year = 2023, base_path = base_path)
 
 dim(report)
-#> [1] 527   3
+#> [1] 527   4
 head(report, 6)
-#>                                                                                          xpath
-#> 1              /Return/ReturnData/IRS990ScheduleI/RecipientTable/USAddress/StateAbbreviationCd
-#> 2                                  /Return/ReturnData/IRS990ScheduleI/RecipientTable/USAddress
-#> 3                                            /Return/ReturnData/IRS990ScheduleI/RecipientTable
-#> 4                           /Return/ReturnData/IRS990ScheduleI/RecipientTable/USAddress/CityNm
-#> 5 /Return/ReturnData/IRS990ScheduleI/RecipientTable/RecipientBusinessName/BusinessNameLine1Txt
-#> 6                      /Return/ReturnData/IRS990ScheduleI/RecipientTable/RecipientBusinessName
-#>   count_occurrences schema_versions
-#> 1                83        2022v5.0
-#> 2                83        2022v5.0
-#> 3                83        2022v5.0
-#> 4                83        2022v5.0
-#> 5                83        2022v5.0
-#> 6                83        2022v5.0
+#>                                                                     xpath count_occurrences
+#> 1                       /Return/ReturnData/IRS990ScheduleI/RecipientTable                83
+#> 2          /Return/ReturnData/IRS990ScheduleI/RecipientTable/CashGrantAmt                83
+#> 3        /Return/ReturnData/IRS990ScheduleI/RecipientTable/IRCSectionDesc                83
+#> 4  /Return/ReturnData/IRS990ScheduleI/RecipientTable/NonCashAssistanceAmt                83
+#> 5     /Return/ReturnData/IRS990ScheduleI/RecipientTable/PurposeOfGrantTxt                83
+#> 6 /Return/ReturnData/IRS990ScheduleI/RecipientTable/RecipientBusinessName                83
+#>   count_filings schema_versions
+#> 1             1        2022v5.0
+#> 2             1        2022v5.0
+#> 3             1        2022v5.0
+#> 4             1        2022v5.0
+#> 5             1        2022v5.0
+#> 6             1        2022v5.0
 ```
 
 The columns are:
@@ -134,7 +125,7 @@ data(concordance, package = "ef2")
 allx <- process_xpaths(years = 2023, base_path = base_path, concordance = concordance)
 
 dim(allx)
-#> [1] 6953   29
+#> [1] 6954   30
 ```
 
 That `all = TRUE` merge is the key: XPaths that appear in the **data but not the
