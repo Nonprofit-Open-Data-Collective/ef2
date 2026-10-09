@@ -6,6 +6,10 @@
 #' shard. When all workers complete, the shards are merged into a unified
 #' database for the specified year.
 #'
+#' Workers share one queue of batch files and claim the next batch when they
+#' finish one (see [run_batch_queue()]), so a slow filing holds up one worker
+#' rather than every batch assigned to it (EF2-20).
+#'
 #' @param year Integer. Year label for the database.
 #' @param urls Optional character vector of XML URLs to process. If NULL,
 #'   resumes from existing batch files in the year's folder.
@@ -52,6 +56,10 @@ build_database <- function(year, urls = NULL, group.size = 25,
   year_path <- normalizePath(file.path(path, year), mustWork = FALSE)
   dir.create(year_path, showWarnings = FALSE, recursive = TRUE)
 
+  # EF2-20: clear claims on batches an earlier run did not finish (an error, or
+  # an interruption), so this run's workers can take them.
+  release_claimed_batches(year_path)
+
   # --- Use existing or new batch files ---
   if (!is.null(urls)) {
     message("\U0001F4E6 Creating new batch files for ", year)
@@ -80,9 +88,13 @@ build_database <- function(year, urls = NULL, group.size = 25,
   on.exit(future::plan(future::sequential), add = TRUE)
   future::plan(future::multisession, workers = max.cores)
 
-  # --- Partition batches across workers ---
-  worker_assignments <- split(names(batchfile),
-                              rep(1:max.cores, length.out = n_batches))
+  # --- Shared batch queue (EF2-20) ---
+  # Workers claim batches one at a time from batches/ (run_batch_queue()), so a
+  # slow batch delays only the worker holding it. Fixed per-worker lists once
+  # stranded a worker's whole list behind one hour-long filing. Workers get only
+  # the names and read each batch from disk, so the URL lists are not shipped.
+  batchnames <- names(batchfile)
+  rm(batchfile, urls)
 
   message("\U0001F9EE Processing ", n_batches, " batches across ",
           max.cores, " workers for ", year, "...")
@@ -132,36 +144,24 @@ build_database <- function(year, urls = NULL, group.size = 25,
       stop("Worker ", worker_id, " is using an in-memory DuckDB; check file path or permissions.")
     }
 
-    # --- Process each batch ---
-    for (batchname in batchnames) {
-      batch <- batchfile[[batchname]]
-      if (is.null(batch)) next
-
-      start_time <- Sys.time()
-      log_msg("Processing batch", batchname, "with", length(batch), "files")
-
-      tryCatch({
-        batch_flatten(batch, con = con, ccf = ccf)
-        remove_batch(batchname, path = year_path)
-        elapsed <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 1)
-        log_msg("\u2705 Completed batch", batchname, "in", elapsed, "sec")
-      },
-      error = function(e) {
-        log_msg("\u2757 Error in batch", batchname, ":", conditionMessage(e))
-      })
-    }
+    # --- Claim and process batches until the queue is empty ---
+    done <- run_batch_queue(
+      batchnames, year_path,
+      process = function(batch) batch_flatten(batch, con = con, ccf = ccf),
+      log_msg = log_msg
+    )
 
     DBI::dbDisconnect(con, shutdown = TRUE)
-    log_msg("Closed connection for worker", worker_id)
+    log_msg("Closed connection for worker", worker_id, "after", length(done), "batches")
     return(worker_db)
   }
 
   # --- Launch workers ---
   worker_dbs <- furrr::future_map_chr(
-    seq_along(worker_assignments),
+    seq_len(max.cores),
     ~ worker_func(
         worker_id   = .x,
-        batchnames  = worker_assignments[[.x]],
+        batchnames  = batchnames,
         year_path   = year_path,
         ccf         = ccf
       ),
@@ -171,6 +171,7 @@ build_database <- function(year, urls = NULL, group.size = 25,
 
   # --- Merge all worker databases ---
   future::plan(future::sequential)
+  release_claimed_batches(year_path)   # failed batches stay in batches/ for a resume
   main_db <- file.path(year_path, paste0("EFILE", year, ".duckdb"))
   if(is_update){main_db <- file.path(year_path, paste0("EFILE", year, "_UPDATE.duckdb"))}
   # EF2-14: a resumed run hands out only the remaining batches, so workers it
@@ -286,6 +287,7 @@ collect_worker_dbs <- function(year_path, year, worker_dbs = character()) {
 resume_build_database <- function(year, ccf = NULL, path = ".") {
   year_path <- file.path(path, year)
   ccf  <- prep_concordance(ccf)
+  release_claimed_batches(year_path)
   batchfile <- gather_batches(year_path)
   n_batches <- length(batchfile)
 
@@ -354,7 +356,12 @@ merge_duckdbs <- function(main_db, worker_dbs, overwrite = FALSE, cleanup = FALS
     message("\U0001F517 Attaching worker DB: ", basename(dbs))
     DBI::dbExecute(con, sprintf("ATTACH '%s' AS %s (READ_ONLY);", dbs, alias))
 
-    tbls_src <- DBI::dbListTables(con, alias)
+    # Tables of this shard only: dbListTables() ignores the alias and lists the
+    # main database too, so an empty shard (a worker that claimed no batch,
+    # EF2-20) looked as if it had KEYS.
+    tbls_src <- DBI::dbGetQuery(con, sprintf(
+      "SELECT table_name FROM duckdb_tables() WHERE database_name = '%s';", alias
+    ))$table_name
 
     # Filings already in main, taken once per shard before any of its tables
     # are copied (copying KEYS first must not hide the shard's own FLATXML).

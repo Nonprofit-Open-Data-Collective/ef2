@@ -193,3 +193,89 @@ split_index <- function (year, index, group.size = 25) {
   return(invisible(batchfile))
 }
 
+
+
+#' Work through the shared batch queue
+#'
+#' Called by each [build_database()] worker. Batch files in `batches/` form one
+#' queue for all workers: a worker claims a batch by creating the directory
+#' `claimed/<batchname>`, processes the batch, then deletes its batch file and
+#' the claim. Creating a directory succeeds for exactly one worker, so each
+#' batch is processed once, and a worker held up by a slow batch leaves the
+#' rest of the queue to the others (EF2-20).
+#'
+#' A batch file stays in `batches/` until its batch is done, so an interrupted
+#' or failed batch is still there for a resumed run. A failed batch keeps its
+#' claim, so no other worker retries it in the same run;
+#' [release_claimed_batches()] clears the claims.
+#'
+#' The claim is a directory rather than a renamed batch file: on Windows two
+#' workers renaming the same file at once could both succeed.
+#'
+#' Uses base R only, so a test can run it in plain worker sessions.
+#'
+#' @param batchnames Batch names this run may claim, in claim order. Batch files
+#'   in `batches/` that are not named here are left alone.
+#' @param year_path Folder holding `batches/`.
+#' @param process Function applied to each batch (the vector `x` from its file).
+#' @param log_msg Logging function taking `...`.
+#' @return Names of the batches this worker completed.
+#' @keywords internal
+run_batch_queue <- function(batchnames, year_path, process,
+                            log_msg = function(...) invisible(NULL)) {
+  queue  <- file.path(year_path, "batches")
+  claims <- file.path(year_path, "claimed")
+  dir.create(claims, showWarnings = FALSE, recursive = TRUE)
+  done <- character()
+
+  for (batchname in batchnames) {
+    src <- file.path(queue, paste0(batchname, ".R"))
+    if (!file.exists(src)) next                          # already done
+    claim <- file.path(claims, batchname)
+    if (!suppressWarnings(dir.create(claim))) next       # another worker has it
+    if (!file.exists(src)) {                             # finished while we looked
+      unlink(claim, recursive = TRUE)
+      next
+    }
+
+    env <- new.env()
+    sys.source(src, envir = env)
+    batch <- env$x
+
+    start_time <- Sys.time()
+    log_msg("Processing batch", batchname, "with", length(batch), "files")
+    ok <- tryCatch({
+      process(batch)
+      TRUE
+    },
+    error = function(e) {
+      log_msg("\u2757 Error in batch", batchname, ":", conditionMessage(e))
+      FALSE
+    })
+    if (ok) {
+      file.remove(src)                                   # before the claim: see above
+      unlink(claim, recursive = TRUE)
+      done <- c(done, batchname)
+      elapsed <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 1)
+      log_msg("\u2705 Completed batch", batchname, "in", elapsed, "sec")
+    }
+  }
+  done
+}
+
+
+#' Clear batch claims left by an earlier run
+#'
+#' Removes the claims in `claimed/` held by batches that errored, or that a
+#' worker was processing when a run was interrupted. Their batch files are still
+#' in `batches/`, so once the claims are gone the next run picks them up
+#' (EF2-20).
+#'
+#' @param year_path Folder holding `batches/` and `claimed/`.
+#' @return Invisibly, the number of claims cleared.
+#' @keywords internal
+release_claimed_batches <- function(year_path) {
+  claims <- list.dirs(file.path(year_path, "claimed"), full.names = TRUE, recursive = FALSE)
+  unlink(claims, recursive = TRUE)
+  invisible(length(claims))
+}

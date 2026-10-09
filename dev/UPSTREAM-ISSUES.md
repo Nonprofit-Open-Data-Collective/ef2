@@ -2239,6 +2239,67 @@ the S3 copies still need a rebuild and upload.
 
 ---
 
+## EF2-20 — one slow batch strands a worker's whole share of the build
+
+Found 2026-10-08 during the v3_1 TY2024 update (4,503 batches of 25 filings,
+8 workers).
+
+`build_database()` split the batches into fixed per-worker lists up front
+(`split(names(batchfile), rep(1:max.cores, ...))`), and each worker looped over
+its own list. Batch G0865 held a 60 MB filing
+(`202601389349301700_public.xml`) that took over an hour to flatten, and
+worker 2 hit a similar 63-minute batch. Workers 3–8 finished their ~563 batches
+by 19:11 and sat idle while workers 1 and 2 each still had ~450 batches queued
+behind the slow one. The step ran about an hour longer than it needed to.
+
+The tables were not affected; this cost time only.
+
+**Fixed (branch `claude/unruffled-heyrovsky-57dbe1`).**
+- **Shared queue.** Workers share one queue, `batches/`
+  (`run_batch_queue()`). A worker claims the next batch by creating the
+  directory `claimed/<batch>`, which succeeds for exactly one worker. It then
+  processes the batch and deletes the batch file and the claim. A slow batch
+  now holds up only the worker that has it.
+- **Shards.** Each worker still writes only to its own `worker_NN_<year>.duckdb`.
+- **Resume (EF2-14).** A batch file stays in `batches/` until its batch is
+  done, so "files left in `batches/` = unprocessed" still holds.
+  - A failed batch keeps its claim for the rest of the run, so it is not
+    retried in a loop.
+  - `release_claimed_batches()` clears the claims at the end of a run and at
+    the start of the next (also in `resume_build_database()`).
+- **Small worker globals.** Workers get the batch names only and read each
+  batch from disk. `build_database()` drops `batchfile` and `urls` before
+  starting them, so neither is serialized to the workers (see PR #24).
+- **Empty shards.** A worker can now finish without claiming any batch and
+  leave an empty shard. `merge_duckdbs()` crashed on one: it read the shard's
+  tables with `DBI::dbListTables(con, alias)`, which ignores the alias and
+  returned the main database's `KEYS`. It now lists the shard's own tables from
+  `duckdb_tables()`. Under the fixed split the same crash happened only when
+  every batch a worker had failed.
+
+**Not a file rename.** The first version claimed a batch by renaming its file
+into `claimed/`. In the test on Windows, two workers both renamed the same file
+successfully and built that batch twice. Creating a directory is atomic on NTFS
+and POSIX.
+
+**Checks.**
+- **Tests** (`test-batch-queue.R`) run the queue in 3 real worker sessions:
+  12 batches, one taking 6 s and the rest 0.2 s. Every batch completes once.
+  The worker with the slow batch completes fewer than the 4 batches a fixed
+  split would have given it.
+  - Other tests cover failed batches, batches outside this run's list, and an
+    empty shard in the merge.
+- **Stress test.** 400 instant batches on 8 workers: each was claimed once.
+- **End-to-end build.** 8 real patch filings plus one listed twice,
+  `group.size = 1`, 3 workers, from a temporary install. The shards held
+  6/1/1 batches; the merge gave 8 `KEYS` rows for 8 filings and left no batch
+  files or claims.
+
+**Install before building** (see CLAUDE.md). Workers call
+`run_batch_queue()` from the **installed** ef2.
+
+---
+
 ## Explicitly NOT ef2 issues
 
 Filed here only to stop them being re-filed as extraction bugs.
