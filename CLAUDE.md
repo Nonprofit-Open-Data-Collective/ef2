@@ -171,11 +171,16 @@ record is in `dev/UPSTREAM-ISSUES.md` under EF2-18.
   It finds missing filings by `OBJECTID`, builds them with that concordance,
   and appends in place. Pass the release's concordance: `build_database()`
   otherwise falls back to the v1 master concordance.
-- **Status.** The archives are local only, in `DUCKDB_V3_1/` and
-  `DUCKDB_PF_V3_1/`. The relabel is done, the update was running on
-  2026-10-08, and the tables are not built. Nothing is published under v3_1
-  yet. When it is, expect `duckdb/efile_v3_1/`, `duckpf/efilepf_v3_1/`, and
-  `public/efile[pf]_v3_1/`.
+- **Install before building.** `build_database()`'s workers are separate R
+  sessions that load the ef2 **installed in the R library**. They do not see
+  code loaded with `devtools::load_all()`. Run `devtools::install()` first. In
+  v3_1 a stale install (2026-09-24, before #16) keyed 103M patch rows as
+  `OID-https://…`, which then had to be repaired (EF2-18).
+- **Status.** The archives are local only: 17 per form (TY2009–2025)
+  in `DUCKDB_V3_1/` and `DUCKDB_PF_V3_1/`, with 6.31M 990 and 1.23M PF
+  filings. Relabel, update and repair were done 2026-10-08. The tables are not
+  built, and nothing is published under v3_1 yet. When it is, expect
+  `duckdb/efile_v3_1/`, `duckpf/efilepf_v3_1/`, and `public/efile[pf]_v3_1/`.
 
 ## Consumers
 

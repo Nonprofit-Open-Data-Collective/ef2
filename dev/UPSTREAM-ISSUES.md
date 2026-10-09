@@ -1931,20 +1931,56 @@ v3_1 is the first release built from `combine_index(gt, patch)`. Work is in
    - **Checks:** every archive passed the zero-off-label check. Each
      `RELABEL_LOG` keeps its v2_3 row and gains a v3_1 row. No variable was
      renamed.
-2. **Update (running).** Builds TY2025 from GTDC, then adds every filing in the
-   combined index that each archive lacks, in place. This uses
-   `update_db(source_db = <local file>, ccf = <v3_1 concordance>)`. Planned
-   additions:
+2. **Update (done 2026-10-08).** TY2025 was built from GTDC, then every filing
+   in the combined index that an archive lacked was added in place. This used
+   `update_db(source_db = <local file>, ccf = <v3_1 concordance>)`. Every
+   count matched the plan:
 
    | | 990/990EZ | 990-PF |
    |---|---|---|
-   | TY2025 new build | 138,497 GTDC + 68,104 patch | 44,499 GTDC + 23,026 patch |
+   | TY2025 new build | 138,497 GTDC + 68,104 patch = 206,601 | 44,499 GTDC + 23,026 patch = 67,525 |
    | TY2009–2024 updates | 120,199 (TY2021–2024) | 15,946 (TY2016–2019, 2022–2024) |
+   | v3_1 archives | 17 (TY2009–2025), 6,307,836 filings | 17, 1,234,785 filings |
 
    The PF TY2016–2019 additions are 5,298 GTDC-indexed filings that the
-   September PF build missed; the patch is not involved. Each archive gets an
-   `UPDATE_LOG` table: filings before and after, the index used, the
-   concordance, and zero-off-label and duplicate-`OBJECTID` checks.
+   September PF build missed; the patch is not involved.
+
+   **Check.** Re-running the plan against the updated archives shows 0
+   filings missing from every archive. No archive holds a filing that is
+   absent from the build index.
+
+   **Logs.** Each archive's `UPDATE_LOG` table records:
+   - filings before and after;
+   - the index used;
+   - the concordance;
+   - the off-label and duplicate-`OBJECTID` checks.
+
+   **Repair needed: the workers ran the installed ef2.** `build_database()`
+   runs its workers in separate R sessions (`future::multisession`). They load
+   the ef2 **installed in the R library**, not code loaded with
+   `devtools::load_all()` in the calling session. The installed copy dated
+   from 2026-09-24 and predated #16, so:
+   - every patch filing went in keyed
+     `OID-https://…/xml2/v2_3_patch/<id>` (103.1M rows across `KEYS`,
+     `FLATXML` and `ATTRIBUTES`);
+   - it also predated EF2-16 (repeat indices of 6+ digits survive in
+     `XPATH2`).
+
+   `V3_1_WORK/v31_repair.R` rewrote the keys in place and stripped and
+   relabelled any long indices; no added filing had any. Every archive then
+   passed these checks:
+   - every `KEYS` and `FLATXML` key is `OID-` + 18 digits;
+   - no `FLATXML` filing is missing from `KEYS`;
+   - no duplicates;
+   - no `[` left in `XPATH2`;
+   - zero off-label rows.
+
+   ef2 was then reinstalled from `main` (`3dd36c4`).
+
+   **Rule: install ef2 (`devtools::install()`) before any `build_database()`
+   or `update_db()` run.** Loading the source is not enough.
+   `update_db()` also once sent its whole index to every worker and failed
+   on `future`'s 500 MB limit; that is fixed in #24.
 3. **Tables.** Not built yet. They will be rebuilt from the updated archives
    with the merged ef2 (#16, plus EF2-12, EF2-19 and PF headers from #17–#20).
 
