@@ -202,10 +202,12 @@ were generated with `compare_releases()` / `write_release_notes()`
 
   Run all three for any future release.
 - **Pinned concordance.** `update_db()` reads the concordance pinned for a
-  release from `inst/extdata/concordance-<release>.csv.gz`. There is no
-  `efile_v3_1` file yet. Until one is added (from
-  `V3_1_WORK/concordance_v2_F990*.csv`), pass `ccf` explicitly when updating
-  v3_1 archives.
+  release from `inst/extdata/concordance-<release>.csv.gz`. The pinned files
+  are `concordance-efile_v3_1.csv.gz` (7,075 rows) and
+  `concordance-efilepf_v3_1.csv.gz` (2,524 rows), the frozen snapshots v3_1
+  was labelled with. The release name comes from the archive's `RELABEL_LOG`,
+  so updating a local v3_1 archive needs no `ccf`. Install ef2 first, as
+  above.
 
 ## Consumers
 

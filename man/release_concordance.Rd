@@ -25,6 +25,12 @@ concordance990 1.99.1 (commit 3af11bb), \code{concordance("v2", form = "F990")},
 (\code{xpath}, \code{variable_name}, \code{rdb_table}). Pinned rather than read from
 concordance990, because later releases of that package return a different
 concordance (2.0.1: 7,075 rows).
+\item \code{efile_v3_1}: concordance990 2.0.1 (commit 02de916),
+\code{concordance("v2", form = "F990")}, 7,075 rows. Shipped as
+\code{inst/extdata/concordance-efile_v3_1.csv.gz}.
+\item \code{efilepf_v3_1}: the same commit, \code{concordance("v2", form = "F990PF")},
+2,524 rows. Shipped as \code{inst/extdata/concordance-efilepf_v3_1.csv.gz}.
+(v3_1 was labelled from these frozen snapshots; see EF2-18.)
 \item \code{efile_v2_0} to \code{efile_v2_2}, \code{NULL} or \code{""}: \code{\link[=get_concordance]{get_concordance()}}, the
 master concordance those archives were built with.
 \item Anything else, e.g. \code{efilepf_v2_3}: an error. Pass \code{ccf} explicitly.
