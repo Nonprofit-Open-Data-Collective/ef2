@@ -6,21 +6,25 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Extracting One-to-One Tables • ef2</title>
-<script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<script src="../lightswitch.js"></script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet">
+<link href="../deps/Source_Code_Pro-0.4.10/font.css" rel="stylesheet">
+<link href="../deps/Zilla_Slab-0.4.10/font.css" rel="stylesheet">
+<link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Extracting One-to-One Tables">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet">
+<meta property="og:title" content="Extracting One-to-One Tables">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
-    <nav class="navbar navbar-expand-lg fixed-top bg-light" data-bs-theme="light" aria-label="Site navigation"><div class="container">
+    <nav class="navbar navbar-expand-lg fixed-top " aria-label="Site navigation"><div class="container">
 
     <a class="navbar-brand me-2" href="../index.html">ef2</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,16 +39,27 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/identify-new-returns.html">Identifying New Returns to Process</a></li>
     <li><a class="dropdown-item" href="../articles/updating-duckdb.html">Updating a DuckDB Database with Missing Files</a></li>
+    <li><a class="dropdown-item" href="../articles/updating-the-concordance.html">Updating the Concordance for IRS Schema Changes</a></li>
     <li><a class="dropdown-item" href="../articles/flatten-xmls.html">Flattening IRS 990 e-file XML</a></li>
     <li><a class="dropdown-item" href="../articles/extract-one-to-one-tables.html">Extracting One-to-One Tables</a></li>
     <li><a class="dropdown-item" href="../articles/extract-one-to-many-tables.html">Extracting One-to-Many Tables</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json">
 </form></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-lightswitch" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-label="Light switch"><span class="fa fa-sun"></span></button>
+  <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdown-lightswitch">
+<li><button class="dropdown-item" data-bs-theme-value="light"><span class="fa fa-sun"></span> Light</button></li>
+    <li><button class="dropdown-item" data-bs-theme-value="dark"><span class="fa fa-moon"></span> Dark</button></li>
+    <li><button class="dropdown-item" data-bs-theme-value="auto"><span class="fa fa-adjust"></span> Auto</button></li>
+  </ul>
+</li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/Nonprofit-Open-Data-Collective/ef2/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul>
 </div>
 
@@ -61,7 +76,7 @@
       <h1>Extracting One-to-One Tables</h1>
             
       
-
+      <small class="dont-index">Source: <a href="https://github.com/Nonprofit-Open-Data-Collective/ef2/blob/HEAD/vignettes/extract-one-to-one-tables.Rmd" class="external-link"><code>vignettes/extract-one-to-one-tables.Rmd</code></a></small>
       <div class="d-none name"><code>extract-one-to-one-tables.Rmd</code></div>
     </div>
 
@@ -70,9 +85,14 @@
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>A <strong>one-to-one (1:1)</strong> table has exactly one row per filing: the header, the Part I summary, the balance sheet. These are the fields that appear once in a return. This article picks up the flattened output from <a href="flatten-xmls.html">Flattening IRS 990 e-file XML</a> and turns one 1:1 table into a tidy, one-row-per-filing result.</p>
+<p>A <strong>one-to-one (1:1)</strong> table has exactly one row per
+filing: the header, the Part I summary, the balance sheet. These are the
+fields that appear once in a return. This article picks up the flattened
+output from <a href="flatten-xmls.html">Flattening IRS 990 e-file
+XML</a> and turns one 1:1 table into a tidy, one-row-per-filing
+result.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">ef2</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://nonprofit-open-data-collective.github.io/ef2/">ef2</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://tidyr.tidyverse.org" class="external-link">tidyr</a></span><span class="op">)</span></span>
 <span></span>
@@ -85,7 +105,11 @@
 <div class="section level2">
 <h2 id="what-makes-a-table-one-to-one">What makes a table “one-to-one”<a class="anchor" aria-label="anchor" href="#what-makes-a-table-one-to-one"></a>
 </h2>
-<p>The signature of a 1:1 field is <code>TABLE_ID == "TID-00000"</code> — it does not live inside any repeating group, so there is a single instance per filing (see the <a href="flatten-xmls.html">flattening article</a> for how <code>TABLE_ID</code> is derived). We’ll use the <strong>Part I summary</strong> table, <code>F9-P01-T00-SUMMARY</code>:</p>
+<p>The signature of a 1:1 field is
+<code>TABLE_ID == "TID-000-000-000"</code> — it does not live inside any
+repeating group, so there is a single instance per filing (see the <a href="flatten-xmls.html">flattening article</a> for how
+<code>TABLE_ID</code> is derived). We’ll use the <strong>Part I
+summary</strong> table, <code>F9-P01-T00-SUMMARY</code>:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">summary_long</span> <span class="op">&lt;-</span> <span class="va">flat</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">TYPE</span> <span class="op">==</span> <span class="st">"terminal"</span>, <span class="va">RDB_TABLE</span> <span class="op">==</span> <span class="st">"F9-P01-T00-SUMMARY"</span><span class="op">)</span></span>
@@ -93,15 +117,15 @@
 <span><span class="va">summary_long</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">TABLE_ID</span>, <span class="va">VARIABLE_NAME</span>, <span class="va">VALUE</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fl">8</span><span class="op">)</span></span>
-<span><span class="co">#&gt;    TABLE_ID                    VARIABLE_NAME</span></span>
-<span><span class="co">#&gt; 1 TID-00000       F9_01_ACT_GVRN_ACT_MISSION</span></span>
-<span><span class="co">#&gt; 2 TID-00000     F9_01_ACT_GVRN_NUM_VOTE_MEMB</span></span>
-<span><span class="co">#&gt; 3 TID-00000 F9_01_ACT_GVRN_NUM_VOTE_MEMB_IND</span></span>
-<span><span class="co">#&gt; 4 TID-00000          F9_01_ACT_GVRN_EMPL_TOT</span></span>
-<span><span class="co">#&gt; 5 TID-00000           F9_01_ACT_GVRN_VOL_TOT</span></span>
-<span><span class="co">#&gt; 6 TID-00000      F9_01_ACT_GVRN_UBIZ_REV_TOT</span></span>
-<span><span class="co">#&gt; 7 TID-00000  F9_01_ACT_GVRN_UBIZ_TAXABLE_NET</span></span>
-<span><span class="co">#&gt; 8 TID-00000           F9_01_REV_CONTR_TOT_PY</span></span>
+<span><span class="co">#&gt;          TABLE_ID                    VARIABLE_NAME</span></span>
+<span><span class="co">#&gt; 1 TID-000-000-000       F9_01_ACT_GVRN_ACT_MISSION</span></span>
+<span><span class="co">#&gt; 2 TID-000-000-000     F9_01_ACT_GVRN_NUM_VOTE_MEMB</span></span>
+<span><span class="co">#&gt; 3 TID-000-000-000 F9_01_ACT_GVRN_NUM_VOTE_MEMB_IND</span></span>
+<span><span class="co">#&gt; 4 TID-000-000-000          F9_01_ACT_GVRN_EMPL_TOT</span></span>
+<span><span class="co">#&gt; 5 TID-000-000-000           F9_01_ACT_GVRN_VOL_TOT</span></span>
+<span><span class="co">#&gt; 6 TID-000-000-000      F9_01_ACT_GVRN_UBIZ_REV_TOT</span></span>
+<span><span class="co">#&gt; 7 TID-000-000-000  F9_01_ACT_GVRN_UBIZ_TAXABLE_NET</span></span>
+<span><span class="co">#&gt; 8 TID-000-000-000           F9_01_REV_CONTR_TOT_PY</span></span>
 <span><span class="co">#&gt;                                                                                         VALUE</span></span>
 <span><span class="co">#&gt; 1 THE CF SUPPORTS CHARITABLE, LITERARY AND EDUCATIONAL PROGRAMS IN THE NORTHERN REGION OF VA.</span></span>
 <span><span class="co">#&gt; 2                                                                                          14</span></span>
@@ -111,12 +135,17 @@
 <span><span class="co">#&gt; 6                                                                                           0</span></span>
 <span><span class="co">#&gt; 7                                                                                           0</span></span>
 <span><span class="co">#&gt; 8                                                                                     3261609</span></span></code></pre></div>
-<p>Two things to notice: we keep only <code>TYPE == "terminal"</code> (the leaf nodes that hold data), and every row is <code>TID-00000</code>. That uniform <code>TABLE_ID</code> is what guarantees the table collapses to a single row.</p>
+<p>Two things to notice: we keep only <code>TYPE == "terminal"</code>
+(the leaf nodes that hold data), and every row is
+<code>TID-000-000-000</code>. That uniform <code>TABLE_ID</code> is what
+guarantees the table collapses to a single row.</p>
 </div>
 <div class="section level2">
 <h2 id="pivot-long-wide">Pivot long → wide<a class="anchor" aria-label="anchor" href="#pivot-long-wide"></a>
 </h2>
-<p>Extracting a 1:1 table is a <code><a href="https://tidyr.tidyverse.org/reference/pivot_wider.html" class="external-link">pivot_wider()</a></code>: turn the <code>VARIABLE_NAME</code>/<code>VALUE</code> pairs into columns, keyed by the filing (<code>OBJECTID</code>).</p>
+<p>Extracting a 1:1 table is a <code><a href="https://tidyr.tidyverse.org/reference/pivot_wider.html" class="external-link">pivot_wider()</a></code>: turn the
+<code>VARIABLE_NAME</code>/<code>VALUE</code> pairs into columns, keyed
+by the filing (<code>OBJECTID</code>).</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">one_row</span> <span class="op">&lt;-</span> <span class="va">summary_long</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">OBJECTID</span>, <span class="va">VARIABLE_NAME</span>, <span class="va">VALUE</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -166,12 +195,18 @@
 <span><span class="co">#&gt; $ F9_01_NAFB_LIAB_TOT_EOY          &lt;chr&gt; "1157596"</span></span>
 <span><span class="co">#&gt; $ F9_01_NAFB_TOT_BOY               &lt;chr&gt; "11169608"</span></span>
 <span><span class="co">#&gt; $ F9_01_NAFB_TOT_EOY               &lt;chr&gt; "9411853"</span></span></code></pre></div>
-<p>One filing in, one row out — each concordance variable is now a column. This is exactly what <code><a href="../reference/flatten_table.html">flatten_table()</a></code> does against the DuckDB <code>FLATXML</code> table; here we run it in memory on a single filing to show the mechanics.</p>
+<p>One filing in, one row out — each concordance variable is now a
+column. This is exactly what <code><a href="../reference/flatten_table.html">flatten_table()</a></code> does against
+the DuckDB <code>FLATXML</code> table; here we run it in memory on a
+single filing to show the mechanics.</p>
 </div>
 <div class="section level2">
 <h2 id="adding-keys">Adding keys<a class="anchor" aria-label="anchor" href="#adding-keys"></a>
 </h2>
-<p>In the full pipeline, <code><a href="../reference/build_table.html">build_table()</a></code> wraps this pivot and then calls <code><a href="../reference/add_keys.html">add_keys()</a></code> to left-join the filing’s <code>KEYS</code> (EIN, organization name, tax period, …) onto the front of the table, so every extracted row is self-describing:</p>
+<p>In the full pipeline, <code><a href="../reference/build_table.html">build_table()</a></code> wraps this pivot and
+then calls <code><a href="../reference/add_keys.html">add_keys()</a></code> to left-join the filing’s
+<code>KEYS</code> (EIN, organization name, tax period, …) onto the front
+of the table, so every extracted row is self-describing:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">url</span>      <span class="op">&lt;-</span> <span class="st">"https://gt990datalake-rawdata.s3.amazonaws.com/EfileData/XmlFiles/202341529349301414_public.xml"</span></span>
 <span><span class="va">xml_file</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"sample_990.xml"</span>, package <span class="op">=</span> <span class="st">"ef2"</span><span class="op">)</span></span>
@@ -193,25 +228,40 @@
 <div class="section level2">
 <h2 id="edge-case-a-11-field-that-isnt">Edge case: a “1:1” field that isn’t<a class="anchor" aria-label="anchor" href="#edge-case-a-11-field-that-isnt"></a>
 </h2>
-<p><code><a href="https://tidyr.tidyverse.org/reference/pivot_wider.html" class="external-link">pivot_wider()</a></code> assumes each <code>VARIABLE_NAME</code> occurs <strong>once</strong> per filing. If a field the concordance treats as 1:1 actually repeats in a return, <code><a href="https://tidyr.tidyverse.org/reference/pivot_wider.html" class="external-link">pivot_wider()</a></code> can’t fit two values in one cell — it warns and produces a <em>list-column</em>:</p>
+<p><code><a href="https://tidyr.tidyverse.org/reference/pivot_wider.html" class="external-link">pivot_wider()</a></code> assumes each <code>VARIABLE_NAME</code>
+occurs <strong>once</strong> per filing. If a field the concordance
+treats as 1:1 actually repeats in a return, <code><a href="https://tidyr.tidyverse.org/reference/pivot_wider.html" class="external-link">pivot_wider()</a></code>
+can’t fit two values in one cell — it warns and produces a
+<em>list-column</em>:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">n_per_var</span> <span class="op">&lt;-</span> <span class="va">summary_long</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/count.html" class="external-link">count</a></span><span class="op">(</span><span class="va">VARIABLE_NAME</span>, name <span class="op">=</span> <span class="st">"n"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">n_per_var</span><span class="op">$</span><span class="va">n</span><span class="op">)</span>   <span class="co"># all 1 == cleanly one-to-one</span></span>
 <span><span class="co">#&gt; [1] 1 1</span></span></code></pre></div>
-<p>When this range is not <code>1 1</code>, that variable is a signal to investigate: either the filing is unusual, or the concordance has mis-classified a repeating field as 1:1 and it belongs in a one-to-many table instead — the subject of the next article.</p>
+<p>When this range is not <code>1 1</code>, that variable is a signal to
+investigate: either the filing is unusual, or the concordance has
+mis-classified a repeating field as 1:1 and it belongs in a one-to-many
+table instead — the subject of the next article.</p>
 </div>
 <div class="section level2">
 <h2 id="what-you-learned">What you learned<a class="anchor" aria-label="anchor" href="#what-you-learned"></a>
 </h2>
 <ul>
-<li>A 1:1 table is the set of <code>TYPE == "terminal"</code> rows for one <code>RDB_TABLE</code>, all with <code>TABLE_ID == "TID-00000"</code>.</li>
+<li>A 1:1 table is the set of <code>TYPE == "terminal"</code> rows for
+one <code>RDB_TABLE</code>, all with
+<code>TABLE_ID == "TID-000-000-000"</code>.</li>
 <li>
-<code>pivot_wider(names_from = VARIABLE_NAME, values_from = VALUE)</code> collapses them to one row per filing — the core of <code><a href="../reference/flatten_table.html">flatten_table()</a></code> / <code><a href="../reference/build_table.html">build_table()</a></code>.</li>
+<code>pivot_wider(names_from = VARIABLE_NAME, values_from = VALUE)</code>
+collapses them to one row per filing — the core of
+<code><a href="../reference/flatten_table.html">flatten_table()</a></code> / <code><a href="../reference/build_table.html">build_table()</a></code>.</li>
 <li>
-<code><a href="../reference/add_keys.html">add_keys()</a></code> prepends the filing’s identifying metadata.</li>
-<li>A <code>VARIABLE_NAME</code> that appears more than once per filing breaks the 1:1 assumption and points to a one-to-many table.</li>
+<code><a href="../reference/add_keys.html">add_keys()</a></code> prepends the filing’s identifying
+metadata.</li>
+<li>A <code>VARIABLE_NAME</code> that appears more than once per filing
+breaks the 1:1 assumption and points to a one-to-many table.</li>
 </ul>
-<p>Next: <strong>“Extracting One-to-Many Tables”</strong> uses <code>TABLE_ID</code> to reassemble repeating groups like grants and compensation.</p>
+<p>Next: <strong>“Extracting One-to-Many Tables”</strong> uses
+<code>TABLE_ID</code> to reassemble repeating groups like grants and
+compensation.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
@@ -220,11 +270,11 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Jesse Lecy.</p>
+  <p>Developed by <a href="https://github.com/lecy" class="external-link">Jesse Lecy</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.3.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer>

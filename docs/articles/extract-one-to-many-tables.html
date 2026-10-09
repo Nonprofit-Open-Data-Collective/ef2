@@ -6,21 +6,25 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Extracting One-to-Many Tables • ef2</title>
-<script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<script src="../lightswitch.js"></script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet">
+<link href="../deps/Source_Code_Pro-0.4.10/font.css" rel="stylesheet">
+<link href="../deps/Zilla_Slab-0.4.10/font.css" rel="stylesheet">
+<link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Extracting One-to-Many Tables">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet">
+<meta property="og:title" content="Extracting One-to-Many Tables">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
-    <nav class="navbar navbar-expand-lg fixed-top bg-light" data-bs-theme="light" aria-label="Site navigation"><div class="container">
+    <nav class="navbar navbar-expand-lg fixed-top " aria-label="Site navigation"><div class="container">
 
     <a class="navbar-brand me-2" href="../index.html">ef2</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,16 +39,27 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/identify-new-returns.html">Identifying New Returns to Process</a></li>
     <li><a class="dropdown-item" href="../articles/updating-duckdb.html">Updating a DuckDB Database with Missing Files</a></li>
+    <li><a class="dropdown-item" href="../articles/updating-the-concordance.html">Updating the Concordance for IRS Schema Changes</a></li>
     <li><a class="dropdown-item" href="../articles/flatten-xmls.html">Flattening IRS 990 e-file XML</a></li>
     <li><a class="dropdown-item" href="../articles/extract-one-to-one-tables.html">Extracting One-to-One Tables</a></li>
     <li><a class="dropdown-item" href="../articles/extract-one-to-many-tables.html">Extracting One-to-Many Tables</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json">
 </form></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-lightswitch" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-label="Light switch"><span class="fa fa-sun"></span></button>
+  <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdown-lightswitch">
+<li><button class="dropdown-item" data-bs-theme-value="light"><span class="fa fa-sun"></span> Light</button></li>
+    <li><button class="dropdown-item" data-bs-theme-value="dark"><span class="fa fa-moon"></span> Dark</button></li>
+    <li><button class="dropdown-item" data-bs-theme-value="auto"><span class="fa fa-adjust"></span> Auto</button></li>
+  </ul>
+</li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/Nonprofit-Open-Data-Collective/ef2/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul>
 </div>
 
@@ -61,7 +76,7 @@
       <h1>Extracting One-to-Many Tables</h1>
             
       
-
+      <small class="dont-index">Source: <a href="https://github.com/Nonprofit-Open-Data-Collective/ef2/blob/HEAD/vignettes/extract-one-to-many-tables.Rmd" class="external-link"><code>vignettes/extract-one-to-many-tables.Rmd</code></a></small>
       <div class="d-none name"><code>extract-one-to-many-tables.Rmd</code></div>
     </div>
 
@@ -70,10 +85,16 @@
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>A <strong>one-to-many (1:M)</strong> table has <em>many</em> rows per filing: a grant list, a roster of officers and their compensation, a schedule of foreign activities. The same set of fields repeats once per entry. Reassembling those entries correctly is the whole job — and it hinges on the <code>TABLE_ID</code> column produced during <a href="flatten-xmls.html">flattening</a>.</p>
-<p>Our example filing’s Schedule I lists <strong>83 grants</strong>, and its Part VII lists <strong>15 officers and directors</strong> — two clean one-to-many tables.</p>
+<p>A <strong>one-to-many (1:M)</strong> table has <em>many</em> rows per
+filing: a grant list, a roster of officers and their compensation, a
+schedule of foreign activities. The same set of fields repeats once per
+entry. Reassembling those entries correctly is the whole job — and it
+hinges on the <code>TABLE_ID</code> column produced during <a href="flatten-xmls.html">flattening</a>.</p>
+<p>Our example filing’s Schedule I lists <strong>83 grants</strong>, and
+its Part VII lists <strong>15 officers and directors</strong> — two
+clean one-to-many tables.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">ef2</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://nonprofit-open-data-collective.github.io/ef2/">ef2</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://tidyr.tidyverse.org" class="external-link">tidyr</a></span><span class="op">)</span></span>
 <span></span>
@@ -84,7 +105,8 @@
 <div class="section level2">
 <h2 id="the-repeating-group">The repeating group<a class="anchor" aria-label="anchor" href="#the-repeating-group"></a>
 </h2>
-<p>We’ll extract Schedule I, Part II — grants to U.S. organizations, <code>SI-P02-T01-GRANTS-US-ORGS-GOVTS</code>:</p>
+<p>We’ll extract Schedule I, Part II — grants to U.S. organizations,
+<code>SI-P02-T01-GRANTS-US-ORGS-GOVTS</code>:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">grants_long</span> <span class="op">&lt;-</span> <span class="va">flat</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">TYPE</span> <span class="op">==</span> <span class="st">"terminal"</span>, <span class="va">RDB_TABLE</span> <span class="op">==</span> <span class="st">"SI-P02-T01-GRANTS-US-ORGS-GOVTS"</span><span class="op">)</span></span>
@@ -95,23 +117,30 @@
 <span><span class="va">grants_long</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">TABLE_ID</span>, <span class="va">VARIABLE_NAME</span>, <span class="va">VALUE</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fl">10</span><span class="op">)</span></span>
-<span><span class="co">#&gt;     TABLE_ID                  VARIABLE_NAME                  VALUE</span></span>
-<span><span class="co">#&gt; 1  TID-00001     SI_02_GRANT_US_ORG_NAME_L1        100WOMEN STRONG</span></span>
-<span><span class="co">#&gt; 2  TID-00001     SI_02_GRANT_US_ORG_ADDR_L1 714 EAST MARKET STREET</span></span>
-<span><span class="co">#&gt; 3  TID-00001   SI_02_GRANT_US_ORG_ADDR_CITY               LEESBURG</span></span>
-<span><span class="co">#&gt; 4  TID-00001  SI_02_GRANT_US_ORG_ADDR_STATE                     VA</span></span>
-<span><span class="co">#&gt; 5  TID-00001    SI_02_GRANT_US_ORG_ADDR_ZIP                  20178</span></span>
-<span><span class="co">#&gt; 6  TID-00001         SI_02_GRANT_US_ORG_EIN              541950727</span></span>
-<span><span class="co">#&gt; 7  TID-00001 SI_02_GRANT_US_ORG_IRC_SECTION        INTERFUND GRANT</span></span>
-<span><span class="co">#&gt; 8  TID-00001    SI_02_GRANT_US_ORG_AMT_CASH                  40250</span></span>
-<span><span class="co">#&gt; 9  TID-00001  SI_02_GRANT_US_ORG_AMT_NONCSH                      0</span></span>
-<span><span class="co">#&gt; 10 TID-00001     SI_02_GRANT_US_ORG_PURPOSE         HUMAN SERVICES</span></span></code></pre></div>
-<p>Look at the <code>TABLE_ID</code> column: the first grant’s fields are all <code>TID-00001</code>, the second grant’s are all <code>TID-00002</code>, and so on. <strong>That is the entire trick of 1:M extraction</strong> — the positional index <code>[N]</code> from the XPath, captured as <code>TABLE_ID</code>, tells us which fields belong to the same entry.</p>
+<span><span class="co">#&gt;           TABLE_ID                  VARIABLE_NAME                  VALUE</span></span>
+<span><span class="co">#&gt; 1  TID-000-000-001     SI_02_GRANT_US_ORG_NAME_L1        100WOMEN STRONG</span></span>
+<span><span class="co">#&gt; 2  TID-000-000-001     SI_02_GRANT_US_ORG_ADDR_L1 714 EAST MARKET STREET</span></span>
+<span><span class="co">#&gt; 3  TID-000-000-001   SI_02_GRANT_US_ORG_ADDR_CITY               LEESBURG</span></span>
+<span><span class="co">#&gt; 4  TID-000-000-001  SI_02_GRANT_US_ORG_ADDR_STATE                     VA</span></span>
+<span><span class="co">#&gt; 5  TID-000-000-001    SI_02_GRANT_US_ORG_ADDR_ZIP                  20178</span></span>
+<span><span class="co">#&gt; 6  TID-000-000-001         SI_02_GRANT_US_ORG_EIN              541950727</span></span>
+<span><span class="co">#&gt; 7  TID-000-000-001 SI_02_GRANT_US_ORG_IRC_SECTION        INTERFUND GRANT</span></span>
+<span><span class="co">#&gt; 8  TID-000-000-001    SI_02_GRANT_US_ORG_AMT_CASH                  40250</span></span>
+<span><span class="co">#&gt; 9  TID-000-000-001  SI_02_GRANT_US_ORG_AMT_NONCSH                      0</span></span>
+<span><span class="co">#&gt; 10 TID-000-000-001     SI_02_GRANT_US_ORG_PURPOSE         HUMAN SERVICES</span></span></code></pre></div>
+<p>Look at the <code>TABLE_ID</code> column: the first grant’s fields
+are all <code>TID-000-000-001</code>, the second grant’s are all
+<code>TID-000-000-002</code>, and so on. <strong>That is the entire
+trick of 1:M extraction</strong> — the positional index <code>[N]</code>
+from the XPath, captured as <code>TABLE_ID</code>, tells us which fields
+belong to the same entry.</p>
 </div>
 <div class="section level2">
 <h2 id="pivot-keyed-by-filing-and-table_id">Pivot — keyed by filing <em>and</em> <code>TABLE_ID</code><a class="anchor" aria-label="anchor" href="#pivot-keyed-by-filing-and-table_id"></a>
 </h2>
-<p>The 1:1 pivot keyed only on <code>OBJECTID</code>. For 1:M we key on <code>OBJECTID</code> <strong>and</strong> <code>TABLE_ID</code>, so each entry becomes its own row:</p>
+<p>The 1:1 pivot keyed only on <code>OBJECTID</code>. For 1:M we key on
+<code>OBJECTID</code> <strong>and</strong> <code>TABLE_ID</code>, so
+each entry becomes its own row:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">grants_wide</span> <span class="op">&lt;-</span> <span class="va">grants_long</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">OBJECTID</span>, <span class="va">TABLE_ID</span>, <span class="va">VARIABLE_NAME</span>, <span class="va">VALUE</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -124,15 +153,20 @@
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">TABLE_ID</span>, <span class="va">SI_02_GRANT_US_ORG_EIN</span>, <span class="va">SI_02_GRANT_US_ORG_AMT_CASH</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fl">5</span><span class="op">)</span></span>
 <span><span class="co">#&gt; # A tibble: 5 × 3</span></span>
-<span><span class="co">#&gt;   TABLE_ID  SI_02_GRANT_US_ORG_EIN SI_02_GRANT_US_ORG_AMT_CASH</span></span>
-<span><span class="co">#&gt;   &lt;chr&gt;     &lt;chr&gt;                  &lt;chr&gt;                      </span></span>
-<span><span class="co">#&gt; 1 TID-00001 541950727              40250                      </span></span>
-<span><span class="co">#&gt; 2 TID-00002 811191778              37729                      </span></span>
-<span><span class="co">#&gt; 3 TID-00003 453081114              77417                      </span></span>
-<span><span class="co">#&gt; 4 TID-00004 271118675              63008                      </span></span>
-<span><span class="co">#&gt; 5 TID-00005 541515133              350000</span></span></code></pre></div>
-<p>This mirrors <code><a href="../reference/build_rdb_table.html">build_rdb_table()</a></code>, which does the same pivot against the DuckDB <code>FLATXML</code> table and carries <code>TABLE_ID</code> through so the rows stay separated.</p>
-<p><strong>Why <code>TABLE_ID</code> is essential:</strong> drop it from the key and every grant’s values pile into a single cell. <code><a href="https://tidyr.tidyverse.org/reference/pivot_wider.html" class="external-link">pivot_wider()</a></code> can’t store thousands of EINs in one position, so it produces list-columns instead of a clean table:</p>
+<span><span class="co">#&gt;   TABLE_ID        SI_02_GRANT_US_ORG_EIN SI_02_GRANT_US_ORG_AMT_CASH</span></span>
+<span><span class="co">#&gt;   &lt;chr&gt;           &lt;chr&gt;                  &lt;chr&gt;                      </span></span>
+<span><span class="co">#&gt; 1 TID-000-000-001 541950727              40250                      </span></span>
+<span><span class="co">#&gt; 2 TID-000-000-002 811191778              37729                      </span></span>
+<span><span class="co">#&gt; 3 TID-000-000-003 453081114              77417                      </span></span>
+<span><span class="co">#&gt; 4 TID-000-000-004 271118675              63008                      </span></span>
+<span><span class="co">#&gt; 5 TID-000-000-005 541515133              350000</span></span></code></pre></div>
+<p>This mirrors <code><a href="../reference/build_rdb_table.html">build_rdb_table()</a></code>, which does the same
+pivot against the DuckDB <code>FLATXML</code> table and carries
+<code>TABLE_ID</code> through so the rows stay separated.</p>
+<p><strong>Why <code>TABLE_ID</code> is essential:</strong> drop it from
+the key and every grant’s values pile into a single cell.
+<code><a href="https://tidyr.tidyverse.org/reference/pivot_wider.html" class="external-link">pivot_wider()</a></code> can’t store thousands of EINs in one
+position, so it produces list-columns instead of a clean table:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">grants_long</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">OBJECTID</span>, <span class="va">VARIABLE_NAME</span>, <span class="va">VALUE</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -153,21 +187,30 @@
 <span><span class="co">#&gt; #   SI_02_GRANT_US_ORG_EIN &lt;chr&gt;, SI_02_GRANT_US_ORG_IRC_SECTION &lt;chr&gt;,</span></span>
 <span><span class="co">#&gt; #   SI_02_GRANT_US_ORG_AMT_CASH &lt;chr&gt;, SI_02_GRANT_US_ORG_AMT_NONCSH &lt;chr&gt;,</span></span>
 <span><span class="co">#&gt; #   SI_02_GRANT_US_ORG_PURPOSE &lt;chr&gt;</span></span></code></pre></div>
-<p>Each column comes back as a <code>list</code> — the tell-tale sign that a repeating group was pivoted without its instance key.</p>
+<p>Each column comes back as a <code>list</code> — the tell-tale sign
+that a repeating group was pivoted without its instance key.</p>
 </div>
 <div class="section level2">
 <h2 id="header-variants-across-schema-versions">Header variants across schema versions<a class="anchor" aria-label="anchor" href="#header-variants-across-schema-versions"></a>
 </h2>
-<p>The full pipeline doesn’t match a single XPath. Because the IRS renamed nodes over the years, <code><a href="../reference/get_table_headers.html">get_table_headers()</a></code> stores <em>several</em> candidate header paths per table, and <code><a href="../reference/build_rdb_table.html">build_rdb_table()</a></code> matches <strong>any</strong> of them:</p>
+<p>The full pipeline doesn’t match a single XPath. Because the IRS
+renamed nodes over the years, <code><a href="../reference/get_table_headers.html">get_table_headers()</a></code> stores
+<em>several</em> candidate header paths per table, and
+<code><a href="../reference/build_rdb_table.html">build_rdb_table()</a></code> matches <strong>any</strong> of them:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/get_table_headers.html">get_table_headers</a></span><span class="op">(</span><span class="op">)</span><span class="op">[[</span><span class="st">"SI-P02-T01-GRANTS-US-ORGS-GOVTS"</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="co">#&gt; [1] "//Form990ScheduleIPartII/RecipientTable" "//IRS990ScheduleI/RecipientTable"</span></span></code></pre></div>
-<p>Whichever variant a given filing used, its rows land in the same logical table.</p>
+<p>Whichever variant a given filing used, its rows land in the same
+logical table.</p>
 </div>
 <div class="section level2">
 <h2 id="edge-case-ragged-entries">Edge case: ragged entries<a class="anchor" aria-label="anchor" href="#edge-case-ragged-entries"></a>
 </h2>
-<p>Entries in a 1:M group are not required to carry the same fields — one grant may list a street address, another only a city, a third may add a non-cash valuation. Pivoting yields a <strong>ragged</strong> table, and <code>values_fill = ""</code> backfills the gaps so every row has the same columns:</p>
+<p>Entries in a 1:M group are not required to carry the same fields —
+one grant may list a street address, another only a city, a third may
+add a non-cash valuation. Pivoting yields a <strong>ragged</strong>
+table, and <code>values_fill = ""</code> backfills the gaps so every row
+has the same columns:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Fill rate of every grant field across all entries: 1 = always present.</span></span>
 <span><span class="va">grants_wide</span> <span class="op">|&gt;</span></span>
@@ -190,13 +233,20 @@
 <h2 id="what-you-learned">What you learned<a class="anchor" aria-label="anchor" href="#what-you-learned"></a>
 </h2>
 <ul>
-<li>A 1:M table is the <code>TYPE == "terminal"</code> rows for one <code>RDB_TABLE</code> spread across many <code>TABLE_ID</code>s (<code>TID-00001</code>, <code>TID-00002</code>, …).</li>
-<li>Pivoting keyed on <code>OBJECTID</code> <strong>and</strong> <code>TABLE_ID</code> reassembles one row per entry — the core of <code><a href="../reference/build_rdb_table.html">build_rdb_table()</a></code>.</li>
-<li>Dropping <code>TABLE_ID</code> collapses the group into unusable list-columns.</li>
+<li>A 1:M table is the <code>TYPE == "terminal"</code> rows for one
+<code>RDB_TABLE</code> spread across many <code>TABLE_ID</code>s
+(<code>TID-000-000-001</code>, <code>TID-000-000-002</code>, …).</li>
+<li>Pivoting keyed on <code>OBJECTID</code> <strong>and</strong>
+<code>TABLE_ID</code> reassembles one row per entry — the core of
+<code><a href="../reference/build_rdb_table.html">build_rdb_table()</a></code>.</li>
+<li>Dropping <code>TABLE_ID</code> collapses the group into unusable
+list-columns.</li>
 <li>
-<code><a href="../reference/get_table_headers.html">get_table_headers()</a></code> supplies multiple header variants so schema changes across years still resolve to one logical table.</li>
+<code><a href="../reference/get_table_headers.html">get_table_headers()</a></code> supplies multiple header variants
+so schema changes across years still resolve to one logical table.</li>
 <li>
-<code>values_fill = ""</code> squares off ragged entries that don’t all share the same fields.</li>
+<code>values_fill = ""</code> squares off ragged entries that don’t
+all share the same fields.</li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -206,11 +256,11 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Jesse Lecy.</p>
+  <p>Developed by <a href="https://github.com/lecy" class="external-link">Jesse Lecy</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.3.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer>

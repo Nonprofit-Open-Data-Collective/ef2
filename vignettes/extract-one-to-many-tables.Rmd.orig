@@ -27,7 +27,7 @@ job — and it hinges on the `TABLE_ID` column produced during
 Our example filing's Schedule I lists **83 grants**, and its Part VII lists **15
 officers and directors** — two clean one-to-many tables.
 
-```{r load}
+```{r load, message = FALSE}
 library(ef2)
 library(dplyr)
 library(tidyr)

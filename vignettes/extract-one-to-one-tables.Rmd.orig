@@ -24,7 +24,7 @@ This article picks up the flattened output from
 [Flattening IRS 990 e-file XML](flatten-xmls.html) and turns one 1:1 table into a
 tidy, one-row-per-filing result.
 
-```{r load}
+```{r load, message = FALSE}
 library(ef2)
 library(dplyr)
 library(tidyr)

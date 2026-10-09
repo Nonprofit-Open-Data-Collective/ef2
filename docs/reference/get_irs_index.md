@@ -1,0 +1,44 @@
+# Read IRS e-file index files
+
+Reads the IRS `index_<year>.csv` files from the Form 990 series
+downloads and keeps the requested return types.
+
+## Usage
+
+``` r
+get_irs_index(years, form_types = c("990", "990EZ", "990PF"), timeout = 600)
+```
+
+## Arguments
+
+- years:
+
+  Integer vector of IRS index years (the year the IRS processed the
+  filing, not the tax year).
+
+- form_types:
+
+  Return types to keep (`RETURN_TYPE`). Default keeps 990, 990EZ and
+  990PF; use `NULL` to keep all.
+
+- timeout:
+
+  Seconds allowed for each download.
+
+## Value
+
+A `data.table` of index rows.
+
+## Details
+
+Every column is read as character, so `OBJECT_ID` and `EIN` keep their
+digits. Index years before 2024 have no `XML_BATCH_ID` column; it is
+added as `NA`. `INDEX_YEAR` records which file each row came from.
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+irs <- get_irs_index( 2024:2026 )
+} # }
+```

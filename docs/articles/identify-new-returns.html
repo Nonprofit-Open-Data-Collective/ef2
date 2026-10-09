@@ -6,21 +6,25 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Identifying New Returns to Process • ef2</title>
-<script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<script src="../lightswitch.js"></script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet">
+<link href="../deps/Source_Code_Pro-0.4.10/font.css" rel="stylesheet">
+<link href="../deps/Zilla_Slab-0.4.10/font.css" rel="stylesheet">
+<link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Identifying New Returns to Process">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet">
+<meta property="og:title" content="Identifying New Returns to Process">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
-    <nav class="navbar navbar-expand-lg fixed-top bg-light" data-bs-theme="light" aria-label="Site navigation"><div class="container">
+    <nav class="navbar navbar-expand-lg fixed-top " aria-label="Site navigation"><div class="container">
 
     <a class="navbar-brand me-2" href="../index.html">ef2</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,16 +39,27 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/identify-new-returns.html">Identifying New Returns to Process</a></li>
     <li><a class="dropdown-item" href="../articles/updating-duckdb.html">Updating a DuckDB Database with Missing Files</a></li>
+    <li><a class="dropdown-item" href="../articles/updating-the-concordance.html">Updating the Concordance for IRS Schema Changes</a></li>
     <li><a class="dropdown-item" href="../articles/flatten-xmls.html">Flattening IRS 990 e-file XML</a></li>
     <li><a class="dropdown-item" href="../articles/extract-one-to-one-tables.html">Extracting One-to-One Tables</a></li>
     <li><a class="dropdown-item" href="../articles/extract-one-to-many-tables.html">Extracting One-to-Many Tables</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json">
 </form></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-lightswitch" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-label="Light switch"><span class="fa fa-sun"></span></button>
+  <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdown-lightswitch">
+<li><button class="dropdown-item" data-bs-theme-value="light"><span class="fa fa-sun"></span> Light</button></li>
+    <li><button class="dropdown-item" data-bs-theme-value="dark"><span class="fa fa-moon"></span> Dark</button></li>
+    <li><button class="dropdown-item" data-bs-theme-value="auto"><span class="fa fa-adjust"></span> Auto</button></li>
+  </ul>
+</li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/Nonprofit-Open-Data-Collective/ef2/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul>
 </div>
 
@@ -61,7 +76,7 @@
       <h1>Identifying New Returns to Process</h1>
             
       
-
+      <small class="dont-index">Source: <a href="https://github.com/Nonprofit-Open-Data-Collective/ef2/blob/HEAD/vignettes/identify-new-returns.Rmd" class="external-link"><code>vignettes/identify-new-returns.Rmd</code></a></small>
       <div class="d-none name"><code>identify-new-returns.Rmd</code></div>
     </div>
 
@@ -70,17 +85,29 @@
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>Every tax year, the IRS releases a new batch of 990 e-file XML filings. The complete list of filings <em>available</em> for a year lives in an <strong>index file</strong> — a data frame with (at minimum) a <code>TaxYear</code> and a <code>URL</code> column, where each <code>URL</code> points to one raw XML document on the Giving Tuesday (“GT”) data lake:</p>
+<p>Every tax year, the IRS releases a new batch of 990 e-file XML
+filings. The complete list of filings <em>available</em> for a year
+lives in an <strong>index file</strong> — a data frame with (at minimum)
+a <code>TaxYear</code> and a <code>URL</code> column, where each
+<code>URL</code> points to one raw XML document on the Giving Tuesday
+(“GT”) data lake:</p>
 <pre><code>https://gt990datalake-rawdata.s3.amazonaws.com/EfileData/XmlFiles/...</code></pre>
-<p>What has actually been <em>processed</em> lives in the published DuckDB databases on the NCCS S3 bucket, one database per year:</p>
-<pre><code>https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/efile_v2_1/EFILE&lt;YEAR&gt;.duckdb</code></pre>
-<p>Inside each database, the <code>KEYS</code> table holds one row per processed return, and its <code>URL</code> column records where that return came from.</p>
-<p>This tutorial shows how to <strong>difference the two</strong> — the filings the index says are available, versus the URLs already baked into the database — so you know exactly what still needs to be processed before running an update.</p>
+<p>What has actually been <em>processed</em> lives in the published
+DuckDB databases on the NCCS S3 bucket, one database per year:</p>
+<pre><code>https://nccs-efile.s3.us-east-1.amazonaws.com/duckdb/efile_v2_3/EFILE&lt;YEAR&gt;.duckdb</code></pre>
+<p>Inside each database, the <code>KEYS</code> table holds one row per
+processed return, and its <code>URL</code> column records where that
+return came from.</p>
+<p>This tutorial shows how to <strong>difference the two</strong> — the
+filings the index says are available, versus the URLs already baked into
+the database — so you know exactly what still needs to be processed
+before running an update.</p>
 </div>
 <div class="section level2">
 <h2 id="step-1-load-the-current">Step 1 — Load the current<a class="anchor" aria-label="anchor" href="#step-1-load-the-current"></a>
 </h2>
-<p>The index file contains a catalog of all IRS 990 Efile XMLs stored on the Giving Tuesday Data Commons:</p>
+<p>The index file contains a catalog of all IRS 990 Efile XMLs stored on
+the Giving Tuesday Data Commons:</p>
 <pre><code>|     |    990|  990EZ|  990PF|  990T|
 |:----|------:|------:|------:|-----:|
 |2020 | 320343| 169865| 114957| 22673|
@@ -90,7 +117,7 @@
 |2024 | 277302| 178868| 112560| 16881|
 |2025 |  22388|  35522|  15215|   668|</code></pre>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">ef2</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://nonprofit-open-data-collective.github.io/ef2/">ef2</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">index</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_current_index_full.html">get_current_index_full</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; |Var1 |   Freq|</span></span>
@@ -269,10 +296,14 @@
 </h2>
 <p><code><a href="../reference/find_missing_urls.html">find_missing_urls()</a></code> does the comparison for you. It:</p>
 <ol style="list-style-type: decimal">
-<li>attaches the remote <code>EFILE&lt;YEAR&gt;.duckdb</code> read-only over <code>httpfs</code>,</li>
-<li>pulls the distinct <code>URL</code> values out of the <code>KEYS</code> table (the <em>processed</em> set),</li>
-<li>filters your index to the requested <code>TaxYear</code> (the <em>available</em> set), and</li>
-<li>returns <code>setdiff(available, processed)</code> — the URLs not yet in the database.</li>
+<li>attaches the remote <code>EFILE&lt;YEAR&gt;.duckdb</code> read-only
+over <code>httpfs</code>,</li>
+<li>pulls the distinct <code>URL</code> values out of the
+<code>KEYS</code> table (the <em>processed</em> set),</li>
+<li>filters your index to the requested <code>TaxYear</code> (the
+<em>available</em> set), and</li>
+<li>returns <code>setdiff(available, processed)</code> — the URLs not
+yet in the database.</li>
 </ol>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">YEAR</span> <span class="op">&lt;-</span> <span class="fl">2023</span></span>
@@ -292,7 +323,9 @@
 <p>You’ll see console messages like:</p>
 <pre><code>🔎 Checking for missing URLs in TaxYear 2023
 1289 missing URLs detected.</code></pre>
-<p>No network writes happen here — this is a <strong>read-only diagnostic</strong>. Run it as often as you like to monitor how far behind a database is.</p>
+<p>No network writes happen here — this is a <strong>read-only
+diagnostic</strong>. Run it as often as you like to monitor how far
+behind a database is.</p>
 </div>
 <div class="section level2">
 <h2 id="step-3-interpret-the-gap">Step 3 — Interpret the gap<a class="anchor" aria-label="anchor" href="#step-3-interpret-the-gap"></a>
@@ -318,17 +351,23 @@
 <p>Interpreting the outcome:</p>
 <ul>
 <li>
-<strong><code>n_missing == 0</code></strong> — the published database already contains every filing in the index. Nothing to do.</li>
+<strong><code>n_missing == 0</code></strong> — the published
+database already contains every filing in the index. Nothing to do.</li>
 <li>
-<strong><code>n_missing &gt; 0</code></strong> — those filings exist on the GT data lake but have not been flattened into the database yet. Feed them to an update (next tutorial).</li>
+<strong><code>n_missing &gt; 0</code></strong> — those filings exist
+on the GT data lake but have not been flattened into the database yet.
+Feed them to an update (next tutorial).</li>
 <li>
-<strong>A <em>negative</em> difference</strong> (rare) means the database contains URLs your index doesn’t — usually a sign your local index is stale. Refresh the index file before trusting the diff.</li>
+<strong>A <em>negative</em> difference</strong> (rare) means the
+database contains URLs your index doesn’t — usually a sign your local
+index is stale. Refresh the index file before trusting the diff.</li>
 </ul>
 </div>
 <div class="section level2">
 <h2 id="step-4-check-several-years-at-once">Step 4 — Check several years at once<a class="anchor" aria-label="anchor" href="#step-4-check-several-years-at-once"></a>
 </h2>
-<p>To audit an entire archive, loop over the years and collect the counts:</p>
+<p>To audit an entire archive, loop over the years and collect the
+counts:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">years</span> <span class="op">&lt;-</span> <span class="fl">2019</span><span class="op">:</span><span class="fl">2023</span></span>
 <span></span>
@@ -366,12 +405,19 @@
 <h2 id="what-you-learned">What you learned<a class="anchor" aria-label="anchor" href="#what-you-learned"></a>
 </h2>
 <ul>
-<li>Index files enumerate the filings <strong>available</strong> on the GT data lake.</li>
-<li>The <code>KEYS</code> table inside each <code>EFILE&lt;YEAR&gt;.duckdb</code> records what’s <strong>processed</strong>.</li>
+<li>Index files enumerate the filings <strong>available</strong> on the
+GT data lake.</li>
+<li>The <code>KEYS</code> table inside each
+<code>EFILE&lt;YEAR&gt;.duckdb</code> records what’s
+<strong>processed</strong>.</li>
 <li>
-<code>find_missing_urls(year, index)</code> returns the difference — a character vector of URLs still to be processed — without modifying anything.</li>
+<code>find_missing_urls(year, index)</code> returns the difference —
+a character vector of URLs still to be processed — without modifying
+anything.</li>
 </ul>
-<p>Once you have that vector of missing URLs, you’re ready to build them into an update. See <strong>“Updating a DuckDB Database with Missing Files.”</strong></p>
+<p>Once you have that vector of missing URLs, you’re ready to build them
+into an update. See <strong>“Updating a DuckDB Database with Missing
+Files.”</strong></p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
@@ -380,11 +426,11 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Jesse Lecy.</p>
+  <p>Developed by <a href="https://github.com/lecy" class="external-link">Jesse Lecy</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.3.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer>

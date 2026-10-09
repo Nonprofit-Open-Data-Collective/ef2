@@ -45,7 +45,7 @@ summary_long <- flat |>
 summary_long |>
   select(TABLE_ID, VARIABLE_NAME, VALUE) |>
   head(8)
-#>    TABLE_ID                    VARIABLE_NAME
+#>          TABLE_ID                    VARIABLE_NAME
 #> 1 TID-000-000-000       F9_01_ACT_GVRN_ACT_MISSION
 #> 2 TID-000-000-000     F9_01_ACT_GVRN_NUM_VOTE_MEMB
 #> 3 TID-000-000-000 F9_01_ACT_GVRN_NUM_VOTE_MEMB_IND

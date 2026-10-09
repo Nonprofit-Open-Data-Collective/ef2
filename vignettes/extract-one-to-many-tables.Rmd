@@ -47,7 +47,7 @@ n_distinct(grants_long$TABLE_ID)   # number of grants in this filing
 grants_long |>
   select(TABLE_ID, VARIABLE_NAME, VALUE) |>
   head(10)
-#>     TABLE_ID                  VARIABLE_NAME                  VALUE
+#>           TABLE_ID                  VARIABLE_NAME                  VALUE
 #> 1  TID-000-000-001     SI_02_GRANT_US_ORG_NAME_L1        100WOMEN STRONG
 #> 2  TID-000-000-001     SI_02_GRANT_US_ORG_ADDR_L1 714 EAST MARKET STREET
 #> 3  TID-000-000-001   SI_02_GRANT_US_ORG_ADDR_CITY               LEESBURG
@@ -83,8 +83,8 @@ grants_wide |>
   select(TABLE_ID, SI_02_GRANT_US_ORG_EIN, SI_02_GRANT_US_ORG_AMT_CASH) |>
   head(5)
 #> # A tibble: 5 × 3
-#>   TABLE_ID  SI_02_GRANT_US_ORG_EIN SI_02_GRANT_US_ORG_AMT_CASH
-#>   <chr>     <chr>                  <chr>                      
+#>   TABLE_ID        SI_02_GRANT_US_ORG_EIN SI_02_GRANT_US_ORG_AMT_CASH
+#>   <chr>           <chr>                  <chr>                      
 #> 1 TID-000-000-001 541950727              40250                      
 #> 2 TID-000-000-002 811191778              37729                      
 #> 3 TID-000-000-003 453081114              77417                      
